@@ -14,10 +14,11 @@ import { StatsView, InspoView } from './views/insights.js';
 import { ExploreView, ProfileView, MeView } from './views/social.js';
 import { MarketView, ListingView, NewListingView, InboxView, ChatView } from './views/market.js';
 import { SettingsView } from './views/settings.js';
+import { DiscoverView } from './views/discover.js';
 
 const ROUTES = [
   ['/closet', ClosetView], ['/closet/add', AddItemsView], ['/item/:id', ItemView], ['/laundry', LaundryView],
-  ['/style', StyleView], ['/outfits', OutfitsView], ['/outfit/:id', OutfitView], ['/builder', BuilderView], ['/builder/:id', BuilderView],
+  ['/style', StyleView], ['/discover', DiscoverView], ['/outfits', OutfitsView], ['/outfit/:id', OutfitView], ['/builder', BuilderView], ['/builder/:id', BuilderView],
   ['/stylist', StylistView], ['/plan', PlanView], ['/trips', TripsView], ['/trip/:id', TripView],
   ['/stats', StatsView], ['/inspo', InspoView],
   ['/explore', ExploreView], ['/u/:username', ProfileView], ['/me', MeView],
@@ -42,7 +43,7 @@ const getPath = () => location.hash.replace(/^#/, '') || '/closet';
 const TABS = [
   ['/closet', 'closet', 'Closet'], ['/style', 'style', 'Style'], ['/stylist', 'chat', 'Stylist'], ['/plan', 'calendar', 'Plan'], ['/explore', 'explore', 'Explore'],
 ];
-const TAB_OWNERS = { '/item': '/closet', '/laundry': '/closet', '/outfits': '/style', '/outfit': '/style', '/builder': '/style', '/trips': '/plan', '/trip': '/plan',
+const TAB_OWNERS = { '/item': '/closet', '/laundry': '/closet', '/outfits': '/style', '/discover': '/style', '/outfit': '/style', '/builder': '/style', '/trips': '/plan', '/trip': '/plan',
   '/u': '/explore', '/market': '/explore', '/listing': '/explore', '/messages': '/explore', '/chat': '/explore', '/me': '/explore', '/stats': '/closet', '/inspo': '/style', '/settings': '/explore' };
 
 function TabBar({ path, unread }) {

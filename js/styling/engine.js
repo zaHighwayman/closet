@@ -288,7 +288,7 @@ export function scoreOutfit(slots, ctx = {}, opts = {}) {
   if (rot > 0.4) reasons.push({ d: 0, text: 'brings out pieces you haven\'t worn lately' });
   if (!opts.noRotation && ctx.recentCombos?.has(signature(all))) { rank(-1); warnings.push({ d: 0, text: 'you wore this exact outfit recently' }); }
   // packing re-use steers the choice but isn't a style merit, so it stays out of the rating
-  const steer = ctx.preferIds ? clothes.filter((c) => ctx.preferIds.has(c.id)).length * 0.7 : 0;
+  const steer = ctx.preferIds ? clothes.filter((c) => ctx.preferIds.has(c.id)).length * (ctx.preferWeight ?? 0.7) : 0;
   if (slots.base?.status === 'dirty' || clothes.some((c) => c.status !== 'clean')) {
     if (!ctx.includeDirty) return null;
   }
@@ -331,6 +331,9 @@ function topDiverse(cands, n, cap) {
   return out;
 }
 
+// pieces you don't own yet (discovery feed) have ids starting with "v:"
+const tooManyVirtual = (ids, ctx) => ctx.maxVirtual != null && ids.filter((id) => String(id).startsWith('v:')).length > ctx.maxVirtual;
+
 const slotIds = (s) => [s.base, s.one_piece, s.mid, s.outer, s.bottom, s.shoes, ...(s.accessories || [])].filter(Boolean).map((i) => i.id);
 
 /**
@@ -372,6 +375,7 @@ export function generate(rawItems, ctx = {}) {
     if (new Set(used).size !== used.length) return;
     if (mustTorso.some((m) => !used.includes(m))) return;
     if (mustBottom && s.one_piece) return;
+    if (tooManyVirtual(slotIds(s), ctx)) return;
     const r = scoreOutfit(s, c, { partial: true });
     if (r) stacks.push({ slots: s, score: r.score + (rand() - 0.5) * jitter, ids: slotIds(s) });
   };
@@ -389,6 +393,7 @@ export function generate(rawItems, ctx = {}) {
     if (s.slots.one_piece) { withBottoms.push(s); continue; }
     for (const b of bottoms) {
       const slots = { ...s.slots, bottom: b };
+      if (tooManyVirtual(slotIds(slots), ctx)) continue;
       const r = scoreOutfit(slots, c, { partial: true });
       if (r) withBottoms.push({ slots, score: r.score + (rand() - 0.5) * jitter, ids: slotIds(slots) });
     }
@@ -401,6 +406,7 @@ export function generate(rawItems, ctx = {}) {
   for (const s of topBottoms) {
     for (const sh of shoes.length ? shoes : [null]) {
       const slots = { ...s.slots, shoes: sh, accessories };
+      if (tooManyVirtual(slotIds(slots), ctx)) continue;
       const r = scoreOutfit(slots, c);
       if (r) full.push({ slots, result: r, score: r.score + (rand() - 0.5) * jitter, ids: slotIds(slots) });
     }

@@ -4,6 +4,7 @@ import { generate, rateItems, resolveClimate, planTrip, gapAnalysis, matchLook }
 import { checkStack } from '../js/styling/layering.js';
 import { normalizeItem } from '../js/styling/taxonomy.js';
 import { compileTaste } from '../js/styling/taste.js';
+import { buildCatalog, discoverBatch } from '../js/styling/catalog.js';
 import { applyWear, markClean } from '../js/styling/laundry.js';
 import { isNeutral, harmonyType, hueFamilies } from '../js/styling/color.js';
 
@@ -262,6 +263,29 @@ test('likes pull similar outfits up', () => {
   const without = rateItems(liked.map((id) => by.get(id)), { occasion: 'casual' });
   const withT = rateItems(liked.map((id) => by.get(id)), { occasion: 'casual', taste });
   assert(withT.rating > without.rating, `${withT.rating} vs ${without.rating}`);
+});
+
+// ---------------------------------------------------------------- discovery feed
+test('catalog skips what you own and types you never wear', () => {
+  const cat = buildCatalog(closet);
+  assert(cat.length > 20, 'catalog too small: ' + cat.length);
+  assert(!cat.some((v) => v.subcategory === 'oxford shirt' && v.colors[0].name === 'white'), 'already own a white oxford');
+  assert(!cat.some((v) => ['dress', 'skirt', 'heels'].includes(v.subcategory)), 'no dresses/skirts for a closet without any');
+  assert(cat.every((v) => v.id.startsWith('v:') && v.virtual));
+});
+
+test('discovery ideas mix owned pieces with 1–2 new ones, no repeats', () => {
+  const cat = buildCatalog(closet);
+  const seen = new Set();
+  const all = [];
+  for (let seed = 1; seed <= 4; seed++) all.push(...discoverBatch(closet, cat, { occasion: 'casual', weather: { mode: 'indoor' } }, { seed, seen }));
+  assert(all.length >= 12, 'only ' + all.length + ' ideas');
+  for (const d of all) {
+    assert(d.missing.length >= 1 && d.missing.length <= 2, 'missing ' + d.missing.length);
+    assert(d.have >= 2 && d.have + d.missing.length === d.total);
+  }
+  const sigs = all.map((d) => d.outfit.itemIds.slice().sort().join());
+  assert(new Set(sigs).size === sigs.length, 'repeats');
 });
 
 log(`\n${pass} passed, ${fail} failed`);

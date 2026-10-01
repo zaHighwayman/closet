@@ -286,3 +286,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 @media (min-width: 720px) {
   .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
 }
+
+/* discover */
+.discover-card .have { white-space: nowrap; font-size: 14px; }
+.progress { flex: 1; height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; min-width: 30px; }
+.progress i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.missing { display: flex; flex-direction: column; gap: 6px; }
+.missing-row { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border-radius: 10px; padding: 6px 6px 6px 8px; font-size: 14px; }
+.missing-row img { width: 36px; height: 36px; object-fit: contain; flex: none; }
+.sentinel { display: flex; justify-content: center; padding: 16px 0 40px; }
+.taste { display: inline-flex; }
+.taste .icon-btn { width: 34px; height: 34px; font-size: 16px; opacity: .55; }
+.taste .icon-btn[aria-pressed="true"] { opacity: 1; background: var(--accent-soft); }

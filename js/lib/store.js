@@ -48,6 +48,17 @@ export function tasteModel() {
 }
 export const tasteSummary = () => describeTaste(tasteModel(), new Map((state.items || []).map((i) => [i.id, i])));
 
+// ------------------------------------------------------------------ wishlist (pieces to buy, from Discover)
+export const wishlist = () => settings().wishlist || [];
+export const inWishlist = (id) => wishlist().some((w) => w.id === id);
+export async function toggleWishlist(piece) {
+  const list = wishlist();
+  const next = list.some((w) => w.id === piece.id) ? list.filter((w) => w.id !== piece.id)
+    : [...list, { id: piece.id, name: piece.name, subcategory: piece.subcategory, color: piece.colors[0], image_url: piece.image_url, t: Date.now() }];
+  await saveSettings({ wishlist: next.slice(-100) });
+  return next.some((w) => w.id === piece.id);
+}
+
 // ------------------------------------------------------------------ profile
 export async function loadProfile() {
   let p = await db.get('profiles', me());

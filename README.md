@@ -19,6 +19,7 @@ A free, open wardrobe app in the spirit of Fitted, with every paid feature inclu
 - **Weather on or off.** You can dress for the forecast, or for a day that's mostly inside with a short trip out. You can also ignore the weather completely (indoors at about 21 °C); on a cold day you then get a separate "commute layer" suggestion.
 - **Accessories with rules.** Hats, AirPods, watches, belts, ties, scarves, jewellery and bags are only added when they suit the outfit. A cap never goes with a preppy or collared-shirt outfit, a belt has to match your shoes, sunglasses need sun and a beanie needs cold.
 - **Learns your taste.** Tap 👍 or 👎 on any outfit and future suggestions and the stylist adjust to it.
+- **Discover.** An endless feed of outfit ideas built from your closet plus one or two pieces you don't own yet. Each idea shows "You have 3/4", what's missing, a link to find it, and a wishlist that ranks pieces by how many ideas they'd unlock.
 - **AI stylist chat** (Groq). It knows your clothes, the weather and what's in the wash. It only recommends outfits the style engine has already checked.
 - **Other features:**
   - manual outfit builder (drag, resize and layer pieces, with a live rating)
