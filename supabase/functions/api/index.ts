@@ -24,6 +24,11 @@ const cors = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
+// New-style projects expose keys as a JSON object, e.g. {"default": "sb_secret_…"}
+function firstKey(envName: string): string | undefined {
+  try { return Object.values(JSON.parse(Deno.env.get(envName) ?? '{}'))[0] as string | undefined; } catch { return undefined; }
+}
+
 async function groq(model: string, body: Record<string, unknown>) {
   const res = await fetch(GROQ_URL, {
     method: 'POST',
@@ -39,12 +44,15 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
 
   const url = Deno.env.get('SUPABASE_URL')!;
-  const userClient = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, {
-    global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
-  });
-  const { data: { user } } = await userClient.auth.getUser();
+  const publicKey = Deno.env.get('SUPABASE_ANON_KEY') || firstKey('SUPABASE_PUBLISHABLE_KEYS');
+  const adminKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || firstKey('SUPABASE_SECRET_KEYS');
+  if (!publicKey || !adminKey) return json({ error: 'Supabase keys missing in function environment' }, 500);
+  // verify the caller ourselves (works with legacy and new JWT signing keys)
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+  const userClient = createClient(url, publicKey);
+  const { data: { user } } = token ? await userClient.auth.getUser(token) : { data: { user: null } };
   if (!user) return json({ error: 'Not signed in' }, 401);
-  const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const admin = createClient(url, adminKey);
 
   let body: any;
   try { body = await req.json(); } catch { return json({ error: 'Bad JSON' }, 400); }

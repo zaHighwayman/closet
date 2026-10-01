@@ -55,7 +55,7 @@ Then open http://localhost:8000.
 
 ### 2. Groq (free AI)
 1. Create an API key at https://console.groq.com/keys.
-2. In Supabase open **Edge Functions → Deploy a new function → Via editor**. Name it `api`, paste [`supabase/functions/api/index.ts`](supabase/functions/api/index.ts) and deploy.
+2. In Supabase open **Edge Functions → Deploy a new function → Via editor**. Name it `api`, paste [`supabase/functions/api/index.ts`](supabase/functions/api/index.ts) and deploy. Then in the function's **Details** tab, turn **off** "Enforce JWT verification" (or "Verify JWT with legacy secret"). The function checks who's signed in itself, and the built-in check doesn't work with Supabase's new keys.
 3. In the left sidebar open **Edge Functions → Secrets** tab (not Project Settings → API Keys, which makes Supabase's own keys). Under **Add new secret**, set the name to `GROQ_API_KEY` and the value to the `gsk_…` key from Groq, then click **Save**.
 
    The key lives only on the server; the browser never sees it. Each user can make 200 AI calls per day, which you can change with an `AI_DAILY_LIMIT` secret. Models can be overridden with the `GROQ_VISION_MODEL`, `GROQ_TEXT_MODEL` and `GROQ_FAST_MODEL` secrets. Check https://console.groq.com/docs/models if Groq retires one.
