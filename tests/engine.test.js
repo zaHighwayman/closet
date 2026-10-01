@@ -3,6 +3,7 @@
 import { generate, rateItems, resolveClimate, planTrip, gapAnalysis, matchLook } from '../js/styling/engine.js';
 import { checkStack } from '../js/styling/layering.js';
 import { normalizeItem } from '../js/styling/taxonomy.js';
+import { compileTaste } from '../js/styling/taste.js';
 import { applyWear, markClean } from '../js/styling/laundry.js';
 import { isNeutral, harmonyType, hueFamilies } from '../js/styling/color.js';
 
@@ -138,15 +139,13 @@ test('neutral detection', () => {
   assert(harmonyType(hueFamilies([{ hex: '#e01b1b', area: 1 }, { hex: '#1bbfe0', area: 0.2 }])) === 'complementary');
 });
 
-test('laundry: wearing to the limit marks dirty, washing resets', () => {
+test('laundry: wearing only counts the wear, never marks dirty', () => {
   let tee = { ...byId['tee-white'], wears_since_wash: 0 };
-  tee = { ...tee, ...applyWear(tee) };
-  assert(tee.status === 'dirty', 'tee should be dirty after one wear');
-  let jeans = { ...byId['jeans-dark'], wears_since_wash: 0 };
-  jeans = { ...jeans, ...applyWear(jeans) };
-  assert(jeans.status === 'clean' && jeans.wears_since_wash === 1);
-  jeans = { ...jeans, ...markClean() };
-  assert(jeans.wears_since_wash === 0);
+  for (let i = 0; i < 5; i++) tee = { ...tee, ...applyWear(tee) };
+  assert(tee.status === 'clean', 'should stay clean until marked dirty');
+  assert(tee.wears_since_wash === 5 && tee.wear_count === 5);
+  tee = { ...tee, ...markClean() };
+  assert(tee.wears_since_wash === 0);
 });
 
 test('must-include builds around an item', () => {
@@ -173,6 +172,96 @@ test('gap analysis suggests missing staples', () => {
 test('inspiration matching finds closest items', () => {
   const m = matchLook(closet, [{ subcategory: 'crewneck sweater', color: { hex: '#20294a', name: 'navy' } }, { subcategory: 'chinos', color: { hex: '#cbb48f' } }]);
   assert(m.matches[0].item.id === 'knit-navy' && m.matches[1].item.id === 'chinos-beige');
+});
+
+// ---------------------------------------------------------------- accessories
+const cap = I('cap', 'cap', '#1a1a1a', 'black');
+const beanie = I('beanie', 'beanie', '#7a7a7a', 'grey');
+const earbuds = I('airpods', 'earbuds', '#f5f5f5', 'white');
+const watch = I('watch', 'watch', '#c0c0c0', 'silver');
+const tie = I('tie', 'tie', '#1f2a44', 'navy');
+const brownBelt = I('belt-brown', 'belt', '#4a2c1a', 'brown', { material: 'leather' });
+const blackBelt = I('belt-black', 'belt', '#111111', 'black', { material: 'leather' });
+const sunnies = I('sunnies', 'sunglasses', '#111111', 'black');
+const accCloset = [...closet, cap, beanie, earbuds, watch, tie, brownBelt, blackBelt, sunnies];
+const mild = { mode: 'weather', dayProfile: 'outside', forecast: { feelsLike: 17, temp: 18, code: 3 } };
+
+test('a cap is rejected with a collared, preppy outfit', () => {
+  const r = rateItems([byId['oxford-white'], byId['knit-navy'], byId['chinos-beige'], byId['loafers'], cap], { occasion: 'smart casual' });
+  assert(r.warnings.some((w) => /cap/.test(w.text)), JSON.stringify(r.warnings));
+});
+
+test('a cap is fine with a casual tee and jeans', () => {
+  const r = rateItems([byId['tee-black'], byId['jeans-dark'], byId['sneakers-white'], cap], { occasion: 'casual' });
+  assert(!r.warnings.some((w) => /cap/.test(w.text)), JSON.stringify(r.warnings));
+});
+
+test('generator never puts a cap on a smart-casual outfit', () => {
+  for (const o of generate(accCloset, { occasion: 'smart casual', count: 6, weather: mild })) assert(!o.itemIds.includes('cap'), o.itemIds.join());
+});
+
+test('a tie needs a dress shirt and a dressy occasion', () => {
+  const r = rateItems([byId['tee-white'], byId['jeans-dark'], byId['sneakers-white'], tie], { occasion: 'casual' });
+  assert(r.warnings.some((w) => /tie/.test(w.text)));
+});
+
+test('belt should match the shoes', () => {
+  const ok = rateItems([byId['oxford-white'], byId['chinos-beige'], byId['loafers'], brownBelt], { occasion: 'smart casual' });
+  const bad = rateItems([byId['oxford-white'], byId['chinos-beige'], byId['loafers'], blackBelt], { occasion: 'smart casual' });
+  assert(ok.reasons.some((r) => /belt matches/.test(r.text)), JSON.stringify(ok.reasons));
+  assert(bad.warnings.some((w) => /doesn't match/.test(w.text)), JSON.stringify(bad.warnings));
+});
+
+test('no beanie or sunglasses indoors; sunglasses only when sunny', () => {
+  for (const o of generate(accCloset, { occasion: 'casual', count: 6, weather: { mode: 'indoor', indoorTemp: 21 } })) {
+    assert(!o.itemIds.includes('beanie') && !o.itemIds.includes('sunnies'), o.itemIds.join());
+  }
+  const sunny = generate(accCloset, { occasion: 'casual', count: 4, weather: { mode: 'weather', dayProfile: 'outside', forecast: { feelsLike: 22, code: 0 } } });
+  assert(sunny.some((o) => o.itemIds.includes('sunnies')), 'expected sunglasses on a sunny day');
+});
+
+test('generator adds accessories to casual outfits', () => {
+  const out = generate(accCloset, { occasion: 'casual', count: 6, weather: mild });
+  assert(out.some((o) => o.accessoryIds.length), 'expected some accessories');
+  for (const o of out) assert(o.accessoryIds.length <= 2);
+  assert(!out.some((o) => o.itemIds.includes('airpods')), 'earbuds only for active/lounge');
+});
+
+// ---------------------------------------------------------------- variety & ratings
+test('a clean, simple outfit rates well (8+)', () => {
+  const r = rateItems([byId['tee-white'], byId['jeans-dark'], byId['sneakers-white']], { occasion: 'casual' });
+  assert(r.rating >= 8, 'got ' + r.rating + ' ' + JSON.stringify(r.warnings));
+});
+
+test('not every suggestion is layered', () => {
+  const out = generate(closet, { occasion: 'smart casual', count: 6, weather: { mode: 'indoor', indoorTemp: 21 } });
+  const layered = out.filter((o) => o.visibleParts.length).length; // a tee hidden under a knit doesn't count
+  assert(layered <= 4 && layered < out.length, `${layered}/${out.length} layered`);
+});
+
+test('a dress shirt works on its own in summer', () => {
+  const ds = I('dress-shirt', 'dress shirt', '#f2f4f8', 'white', { material: 'cotton' });
+  const out = generate([...closet, ds], { occasion: 'smart casual', count: 6, weather: { mode: 'weather', dayProfile: 'outside', forecast: { feelsLike: 26, code: 0 } } });
+  assert(out.some((o) => o.slots.base === 'dress-shirt' && !o.slots.mid), out.map((o) => o.itemIds.join('+')).join(' / '));
+  const warm = (id) => closet.find((i) => i.id === id)?.warmth >= 2.5;
+  assert(out.every((o) => !o.slots.mid || !warm(o.slots.mid)), 'no knits or hoodies at 26°C');
+});
+
+// ---------------------------------------------------------------- taste
+test('a disliked outfit is never suggested again', () => {
+  const first = generate(closet, { occasion: 'casual', count: 1, weather: mild })[0];
+  const taste = compileTaste([{ ids: first.itemIds, s: -1 }], new Map(closet.map((i) => [i.id, i])));
+  const again = generate(closet, { occasion: 'casual', count: 8, weather: mild, taste });
+  assert(!again.some((o) => o.itemIds.slice().sort().join() === first.itemIds.slice().sort().join()));
+});
+
+test('likes pull similar outfits up', () => {
+  const by = new Map(closet.map((i) => [i.id, i]));
+  const liked = ['hoodie-grey', 'tee-white', 'chinos-beige', 'loafers'];
+  const taste = compileTaste([{ ids: liked, s: 1 }, { ids: ['hoodie-grey', 'tee-black', 'chinos-beige', 'sneakers-white'], s: 1 }], by);
+  const without = rateItems(liked.map((id) => by.get(id)), { occasion: 'casual' });
+  const withT = rateItems(liked.map((id) => by.get(id)), { occasion: 'casual', taste });
+  assert(withT.rating > without.rating, `${withT.rating} vs ${without.rating}`);
 });
 
 log(`\n${pass} passed, ${fail} failed`);

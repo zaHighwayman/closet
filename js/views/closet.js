@@ -5,7 +5,7 @@ import { loadSampleCloset } from '../lib/sample.js';
 import { Header, Icon, ItemThumb, Empty, Chips, navigate, toast, Segmented } from '../ui/components.js';
 import { CATEGORIES, CATEGORY_LABELS, SEASONS } from '../styling/taxonomy.js';
 import { colorName, hexToHsl, isNeutral } from '../styling/color.js';
-import { STATUSES, wearsLeft, wearLimitFor } from '../styling/laundry.js';
+import { STATUSES } from '../styling/laundry.js';
 
 const COLOR_GROUPS = ['black', 'white', 'grey', 'navy', 'blue', 'beige', 'brown', 'green', 'olive', 'red', 'pink', 'purple', 'yellow', 'orange'];
 const groupOf = (c) => {
@@ -82,12 +82,13 @@ export function ClosetView({ query }) {
 
 export function LaundryView() {
   const { items } = useStore();
-  const [tab, setTab] = useState('dirty');
+  const [tab, setTab] = useState('worn');
   const dirty = items.filter((i) => i.status === 'dirty');
   const washing = items.filter((i) => i.status === 'in_wash');
-  const dueSoon = items.filter((i) => i.status === 'clean' && wearLimitFor(i) < 100 && wearsLeft(i) === 1 && (i.wears_since_wash || 0) > 0);
+  // clean but worn since the last wash — the ones to check
+  const worn = items.filter((i) => i.status === 'clean' && (i.wears_since_wash || 0) > 0).sort((a, b) => b.wears_since_wash - a.wears_since_wash || (b.last_worn > a.last_worn ? 1 : -1));
   const [sel, setSel] = useState(new Set());
-  const list = tab === 'dirty' ? dirty : tab === 'in_wash' ? washing : dueSoon;
+  const list = tab === 'dirty' ? dirty : tab === 'in_wash' ? washing : worn;
   const toggle = (id) => { const s = new Set(sel); s.has(id) ? s.delete(id) : s.add(id); setSel(s); };
   const ids = sel.size ? [...sel] : list.map((i) => i.id);
 
@@ -100,22 +101,22 @@ export function LaundryView() {
 
   return html`
     <${Header} title="Laundry" backTo="/closet" sub="Outfits only use clean clothes" />
-    <${Segmented} value=${tab} onChange=${(t) => { setTab(t); setSel(new Set()); }} options=${[['dirty', `Dirty (${dirty.length})`], ['in_wash', `In wash (${washing.length})`], ['soon', `Due soon (${dueSoon.length})`]]} />
+    <${Segmented} value=${tab} onChange=${(t) => { setTab(t); setSel(new Set()); }} options=${[['worn', `Worn (${worn.length})`], ['dirty', `Dirty (${dirty.length})`], ['in_wash', `In wash (${washing.length})`]]} />
     ${list.length ? html`
       <p class="muted small">${sel.size ? `${sel.size} selected` : 'Tap items to select some, or act on all of them.'}</p>
       <div class="grid">${list.map((it) => html`<${ItemThumb} item=${it} selected=${sel.has(it.id)} onClick=${() => toggle(it.id)}
-        badge=${tab === 'soon' ? '1 wear left' : null} />`)}</div>
+        badge=${tab === 'worn' ? `worn ${it.wears_since_wash}×` : null} />`)}</div>
       <div class="actions sticky">
         ${tab === 'dirty' ? html`
           <button class="btn" onClick=${() => act('in_wash', 'Into the wash 🫧')}>Start wash</button>
           <button class="btn primary" onClick=${() => act('clean', 'Clean and back in rotation ✨')}>Mark clean</button>` : null}
         ${tab === 'in_wash' ? html`<button class="btn primary wide" onClick=${() => act('clean', 'Laundry done ✨')}>Laundry done → all clean</button>` : null}
-        ${tab === 'soon' ? html`<button class="btn" onClick=${() => act('dirty', 'Marked dirty')}>Mark dirty now</button>` : null}
-      </div>` : html`<${Empty} icon="wash" title=${tab === 'dirty' ? 'Nothing dirty' : tab === 'in_wash' ? 'Nothing in the wash' : 'Nothing due soon'}>
-        ${tab === 'dirty' ? 'Clothes become dirty automatically when you log wears, based on each item\'s "wears before wash".' : ''}<//>`}
+        ${tab === 'worn' ? html`<button class="btn primary wide" onClick=${() => act('dirty', 'Moved to the dirty pile')}>Mark ${sel.size ? 'selected' : 'all'} dirty</button>` : null}
+      </div>` : html`<${Empty} icon="wash" title=${tab === 'dirty' ? 'Nothing dirty' : tab === 'in_wash' ? 'Nothing in the wash' : 'Nothing worn since washing'}>
+        ${tab === 'worn' ? 'Clothes you log as worn show up here so you can decide what needs a wash.' : ''}<//>`}
     <section class="card mt">
       <h3>How it works</h3>
-      <p class="muted small">Every item has a "wears before wash" number (tees 1, jeans 4, jackets 10+ — editable per item). When you log an outfit as worn, wears are counted and items go to the dirty pile when they hit their limit. Dirty and washing items are left out of every suggestion.</p>
+      <p class="muted small">You decide when something is dirty — wearing it only counts the wear. Clothes you've worn since their last wash collect under <b>Worn</b>; mark the ones that need washing as dirty (or use <b>Select</b> in the closet, or the item page). Dirty and washing items are left out of every suggestion until you mark them clean.</p>
     </section>`;
 }
 

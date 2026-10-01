@@ -14,7 +14,33 @@ export const localGroqKey = {
 };
 export const aiAvailable = () => !db.isLocal || !!localGroqKey.get();
 
-async function complete({ kind = 'text', messages, json = false, max_tokens = 1200, temperature = 0.4 }) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Seconds Groq asks us to wait ("Please try again in 7.5s" / "1m2.3s"), or null if it's not a rate limit. */
+function retryAfter(err) {
+  const msg = String(err?.message || '');
+  if (/daily ai limit/i.test(msg)) return null; // our own per-day cap: waiting won't help
+  if (err?.status !== 429 && !/rate limit|too many requests|try again in/i.test(msg)) return null;
+  const m = msg.match(/try again in (?:(\d+)m)?([\d.]+)(m?s)/i);
+  if (!m) return 5;
+  const secs = (Number(m[1] || 0) * 60) + Number(m[2]) / (m[3] === 'ms' ? 1000 : 1);
+  return Math.min(65, secs + 0.5);
+}
+
+/** Calls the AI, waiting and retrying when Groq's free tier says "too many requests". */
+async function complete(opts) {
+  for (let attempt = 0; ; attempt++) {
+    try { return await completeOnce(opts); }
+    catch (e) {
+      const wait = retryAfter(e);
+      if (wait == null || attempt >= 6) throw e;
+      for (let left = Math.ceil(wait); left > 0; left--) { opts.onWait?.(left); await sleep(1000); }
+      opts.onWait?.(0);
+    }
+  }
+}
+
+async function completeOnce({ kind = 'text', messages, json = false, max_tokens = 1200, temperature = 0.4 }) {
   if (!db.isLocal) {
     const r = await db.invokeFunction(FUNCTION_NAME, { kind, messages, json, max_tokens, temperature });
     return r.content;
@@ -28,7 +54,7 @@ async function complete({ kind = 'text', messages, json = false, max_tokens = 12
     method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data?.error?.message || `Groq error ${res.status}`);
+  if (!res.ok) { const err = new Error(data?.error?.message || `Groq error ${res.status}`); err.status = res.status; throw err; }
   return (data.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 }
 
@@ -40,7 +66,7 @@ function parseJSON(text) {
 }
 
 // ------------------------------------------------------------------ tag a clothing photo
-export async function tagItem(imageDataUrl) {
+export async function tagItem(imageDataUrl, { onWait } = {}) {
   const sys = `You are a fashion cataloguer. Look at ONE clothing item photo and return JSON describing it precisely.
 Use exactly these fields:
 {"name": short name e.g. "navy merino crewneck",
@@ -59,7 +85,7 @@ Use exactly these fields:
  "brand": brand if a logo/label is clearly visible else null,
  "description": one sentence a stylist could use to picture it (colour, fabric, details like buttons, collar, logo, wash)}`;
   const text = await complete({
-    kind: 'vision', json: true, max_tokens: 700, temperature: 0.1,
+    kind: 'vision', json: true, max_tokens: 700, temperature: 0.1, onWait,
     messages: [{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'text', text: 'Describe this item.' }, { type: 'image_url', image_url: { url: imageDataUrl } }] }],
   });
   const t = parseJSON(text);

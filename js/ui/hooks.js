@@ -1,6 +1,6 @@
 import { useEffect, useState } from '../lib/deps.js';
 import { forecast, currentPosition, dayToForecast } from '../lib/weather.js';
-import { settings, saveSettings, getState } from '../lib/store.js';
+import { settings, saveSettings, getState, tasteModel } from '../lib/store.js';
 import { seasonFor } from '../styling/taxonomy.js';
 
 /** Location (saved city or GPS) + forecast. Shared by Style, Stylist and Plan. */
@@ -49,6 +49,8 @@ export function baseContext(overrides = {}) {
     season: seasonFor(new Date(), s.location?.lat ?? 60),
     today: Date.now(),
     weather: { mode: s.weatherMode, dayProfile: s.dayProfile, indoorTemp: s.indoorTemp },
+    taste: tasteModel(),
+    accessories: s.suggestAccessories !== false,
     ...overrides,
   };
 }

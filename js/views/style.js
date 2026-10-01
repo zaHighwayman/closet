@@ -1,5 +1,5 @@
 import { html, useState, useEffect, useMemo } from '../lib/deps.js';
-import { useStore, saveOutfit, logWear, planOutfit, recentCombos, settings, saveSettings, todayStr } from '../lib/store.js';
+import { useStore, saveOutfit, logWear, planOutfit, recentCombos, settings, saveSettings, todayStr, rateOutfit, tasteOf } from '../lib/store.js';
 import { generate } from '../styling/engine.js';
 import { OCCASIONS } from '../styling/taxonomy.js';
 import { describe } from '../styling/layering.js';
@@ -39,7 +39,25 @@ export function WeatherControls({ value, onChange, weather, compact }) {
 export const HARMONY = { neutral: 'neutral palette', monochrome: 'one accent colour', analogous: 'analogous colours', complementary: 'complementary colours',
   triadic: 'triadic colours', 'split complementary': 'split-complementary colours', discordant: 'mixed colours' };
 
-export function OutfitCard({ outfit, items, onSave, onWear, onPlan, onEdit, aiWhy, compact }) {
+/** 👍 / 👎 that teach the stylist your taste. */
+export function TasteButtons({ ids, onDislike }) {
+  const [v, setV] = useState(() => tasteOf(ids));
+  async function set(s) {
+    const next = v === s ? 0 : s;
+    setV(next);
+    try {
+      await rateOutfit(ids, next);
+      if (next === 1) toast('Noted — more like this');
+      if (next === -1) { toast('Noted — fewer like this'); onDislike?.(); }
+    } catch (e) { toast(e, 'error'); }
+  }
+  return html`<span class="taste">
+    <button class=${'icon-btn' + (v === 1 ? ' liked-up' : '')} aria-label="I like this" aria-pressed=${v === 1} onClick=${() => set(1)}>👍</button>
+    <button class=${'icon-btn' + (v === -1 ? ' liked-down' : '')} aria-label="Not for me" aria-pressed=${v === -1} onClick=${() => set(-1)}>👎</button>
+  </span>`;
+}
+
+export function OutfitCard({ outfit, items, onSave, onWear, onPlan, onEdit, onDislike, aiWhy, compact }) {
   const byId = new Map(items.map((i) => [i.id, i]));
   const its = outfit.itemIds.map((id) => byId.get(id)).filter(Boolean);
   const commute = outfit.commute && byId.get(outfit.commute.id);
@@ -48,7 +66,7 @@ export function OutfitCard({ outfit, items, onSave, onWear, onPlan, onEdit, aiWh
   return html`<article class="outfit-card">
     <${Board} items=${its} slots=${outfit.slots} />
     <div class="outfit-body">
-      <div class="row"><${Rating} value=${outfit.rating} /><span class="muted small">${HARMONY[outfit.harmony] || outfit.harmony}${layered ? ' · layered' : ''}</span></div>
+      <div class="row"><${Rating} value=${outfit.rating} /><span class="muted small grow">${HARMONY[outfit.harmony] || outfit.harmony}${layered ? ' · layered' : ''}</span><${TasteButtons} ids=${outfit.itemIds} onDislike=${onDislike} /></div>
       ${aiWhy ? html`<p class="ai-why"><${Icon} name="chat" size=${14} /> ${aiWhy}</p>` : null}
       ${!compact ? html`<${Reasons} reasons=${outfit.reasons} warnings=${outfit.warnings} />` : null}
       ${layered ? html`<p class="layer-note small"><${Icon} name="layers" size=${14} /> ${describe(byId.get(outfit.slots.base || outfit.slots.one_piece))} under the ${describe(byId.get(outfit.slots.mid))}${outfit.visibleParts?.length ? ` — let the ${outfit.visibleParts[0].part} show` : ''}${outfit.slots.outer ? `, ${describe(byId.get(outfit.slots.outer))} on top` : ''}.</p>` : null}
@@ -64,7 +82,7 @@ export function OutfitCard({ outfit, items, onSave, onWear, onPlan, onEdit, aiWh
 }
 
 /** Shared actions for engine outfits (save / wear / plan / edit). */
-export function useOutfitActions(items, occasion) {
+export function useOutfitActions(items, occasion, from = '/style') {
   const [planFor, setPlanFor] = useState(null);
   const [date, setDate] = useState(todayStr(new Date(Date.now() + 864e5)));
   const byId = new Map(items.map((i) => [i.id, i]));
@@ -74,9 +92,9 @@ export function useOutfitActions(items, occasion) {
       const saved = await saveOutfit({ item_ids: o.itemIds, layout: layoutOf(o), occasion, rating: o.rating, reasons: o.reasons.slice(0, 5) });
       toast(html`Saved · <a href=${'#/outfit/' + saved.id}>open</a>`);
     },
-    onWear: async () => { await logWear(o.itemIds); toast('Logged as worn today — laundry updated'); },
+    onWear: async () => { await logWear(o.itemIds); toast('Logged as worn today'); },
     onPlan: () => setPlanFor(o),
-    onEdit: () => navigate(`/builder?items=${o.itemIds.join(',')}&slots=${encodeURIComponent(JSON.stringify(o.slots))}&occasion=${occasion || ''}`),
+    onEdit: () => navigate(`/builder?items=${o.itemIds.join(',')}&slots=${encodeURIComponent(JSON.stringify(o.slots))}&occasion=${occasion || ''}&from=${encodeURIComponent(from)}`),
   });
   const sheet = html`<${Sheet} open=${!!planFor} onClose=${() => setPlanFor(null)} title="Plan this outfit">
     <label>Date<input type="date" value=${date} onInput=${(e) => setDate(e.target.value)} /></label>
@@ -96,6 +114,8 @@ export function StyleView({ query }) {
   const [recent, setRecent] = useState(new Set());
   const [picker, setPicker] = useState(false);
   const [ai, setAi] = useState(null); // {loading} | {picks}
+  const [hidden, setHidden] = useState(new Set()); // outfits you just 👎'd
+  const [withAcc, setWithAcc] = useState(s.suggestAccessories !== false);
   const { actions, sheet } = useOutfitActions(items, occasion);
 
   useEffect(() => { recentCombos().then(setRecent).catch(() => {}); }, []);
@@ -104,9 +124,9 @@ export function StyleView({ query }) {
   const clean = items.filter((i) => i.status === 'clean');
   const outfits = useMemo(() => {
     if (clean.length < 2) return [];
-    const ctx = baseContext({ occasion, weather: { ...wx, forecast: forecastFor(weather) }, mustInclude: must, seed: seed || undefined, recentCombos: recent, count: 8 });
+    const ctx = baseContext({ occasion, weather: { ...wx, forecast: forecastFor(weather) }, mustInclude: must, seed: seed || undefined, recentCombos: recent, count: 8, accessories: withAcc });
     return generate(items, ctx);
-  }, [items, occasion, wx, must, seed, recent, weather.data]);
+  }, [items, occasion, wx, must, seed, recent, weather.data, withAcc]);
 
   async function askAi() {
     setAi({ loading: true });
@@ -117,7 +137,7 @@ export function StyleView({ query }) {
     } catch (e) { toast(e, 'error'); setAi(null); }
   }
 
-  const shown = ai?.picks ? ai.picks.map((p) => ({ o: outfits[p.n], why: p.why })) : outfits.map((o) => ({ o }));
+  const shown = (ai?.picks ? ai.picks.map((p) => ({ o: outfits[p.n], why: p.why })) : outfits.map((o) => ({ o }))).filter(({ o }) => !hidden.has(o.itemIds.join()));
   const mustItems = must.map((id) => items.find((i) => i.id === id)).filter(Boolean);
 
   return html`
@@ -129,6 +149,8 @@ export function StyleView({ query }) {
     <div class="row gap wrap">
       ${mustItems.map((it) => html`<span class="pill"><img src=${it.image_url} alt="" /> ${describe(it)} <button aria-label="Remove" onClick=${() => setMust(must.filter((x) => x !== it.id))}>×</button></span>`)}
       <button class="btn small" onClick=${() => setPicker(true)}><${Icon} name="plus" size=${16} /> Build around an item</button>
+      <span class="grow"></span>
+      <${Toggle} checked=${withAcc} onChange=${(v) => { setWithAcc(v); saveSettings({ suggestAccessories: v }).catch(() => {}); }} label="Accessories" />
     </div>
     <div class="row gap">
       <button class="btn" onClick=${() => setSeed(Math.floor(Math.random() * 1e9))}><${Icon} name="shuffle" /> More ideas</button>
@@ -137,7 +159,8 @@ export function StyleView({ query }) {
     </div>
     ${clean.length < 3 ? html`<${Empty} icon="style" title="Not enough clean clothes">Add a few tops, bottoms and shoes${items.length > clean.length ? ', or do some laundry' : ''} to get outfit ideas.<//>`
       : !outfits.length ? html`<${Empty} icon="style" title="No outfit works yet">Nothing in your clean clothes passes the style rules for this occasion and weather. Try another occasion, toggle the weather, or wash something.<//>`
-      : html`<div class="outfit-list">${shown.map(({ o, why }) => html`<${OutfitCard} key=${o.itemIds.join()} outfit=${o} items=${items} aiWhy=${why} ...${actions(o)} />`)}</div>`}
+      : html`<div class="outfit-list">${shown.map(({ o, why }) => html`<${OutfitCard} key=${o.itemIds.join()} outfit=${o} items=${items} aiWhy=${why} ...${actions(o)}
+        onDislike=${() => setHidden(new Set([...hidden, o.itemIds.join()]))} />`)}</div>`}
     ${sheet}
     <${Sheet} open=${picker} onClose=${() => setPicker(false)} title="Build around…">
       <div class="grid small">${clean.map((it) => html`<${ItemThumb} small item=${it} selected=${must.includes(it.id)}

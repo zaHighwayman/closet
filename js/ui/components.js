@@ -3,7 +3,10 @@ import { assignRoles } from '../styling/layering.js';
 import { normalizeItem } from '../styling/taxonomy.js';
 
 // ------------------------------------------------------------------ routing
-export const navigate = (path) => { location.hash = '#' + path; };
+export const navigate = (path, { replace = false } = {}) => {
+  if (replace) location.replace(location.pathname + location.search + '#' + path); // no history entry (e.g. leaving an editor)
+  else location.hash = '#' + path;
+};
 export const back = () => (history.length > 1 ? history.back() : navigate('/'));
 
 // ------------------------------------------------------------------ icons (inline SVG, stroke style)
@@ -133,8 +136,39 @@ export function ItemThumb({ item, onClick, selected, badge, small }) {
 }
 
 // ------------------------------------------------------------------ flat-lay board
-// Positions are % of a 4:5 board. Base layers sit just behind and above their mid layer
-// so the collar peeks out, like a real flat lay.
+// Laid out like a real flat lay: torso on top, trousers below it, shoes at the bottom,
+// outer layer to the side, accessories in a column. Boxes follow each photo's real
+// proportions so pieces keep a consistent size. A base layer sits just behind and
+// above its mid layer so the collar peeks out.
+const DEFAULT_ASPECT = { top: 0.95, outerwear: 0.85, bottom: 0.45, one_piece: 0.5, shoes: 1.9, accessory: 1, bag: 1 };
+const ACC_W = { head: 22, eyes: 20, ears: 11, wrist: 13, jewelry: 12, waist: 24, tie: 7, neck: 16, hands: 15, carry: 25 };
+const BOARD_H = 125; // board is 100 wide × 125 tall (4:5)
+const aspectCache = new Map();
+const aspectPending = new Set();
+const aspectListeners = new Set();
+
+export const aspectOf = (it) => it.aspect || aspectCache.get(it.image_url) || DEFAULT_ASPECT[it.category] || 1;
+
+function measure(url) {
+  if (!url || aspectCache.has(url) || aspectPending.has(url)) return;
+  aspectPending.add(url);
+  const img = new Image();
+  img.onload = () => { aspectCache.set(url, img.naturalWidth / img.naturalHeight || 1); aspectListeners.forEach((f) => f()); };
+  img.src = url;
+}
+
+/** Re-render once the real image proportions are known. */
+export function useAspects(items) {
+  const [v, force] = useState(0);
+  useEffect(() => {
+    const f = () => force((n) => n + 1);
+    aspectListeners.add(f);
+    items.forEach((i) => !i.aspect && measure(i.image_url));
+    return () => aspectListeners.delete(f);
+  }, [items.map((i) => i.id).join()]);
+  return v;
+}
+
 export function autoLayout(items, slotIds = null) {
   const its = items.map(normalizeItem);
   let s;
@@ -143,27 +177,80 @@ export function autoLayout(items, slotIds = null) {
     s = { base: by(slotIds.base), mid: by(slotIds.mid), outer: by(slotIds.outer), bottom: by(slotIds.bottom), one_piece: by(slotIds.one_piece), shoes: by(slotIds.shoes),
       accessories: its.filter((i) => !Object.values(slotIds).includes(i.id)) };
   } else s = assignRoles(its);
+  if (s.one_piece) s.base = null;
+  const accs = s.accessories || [];
+  // a box with the photo's real proportions, width w, capped at maxH
+  const box = (it, cx, top, w, maxH, z) => {
+    const a = aspectOf(it);
+    let h = w / a;
+    if (h > maxH) { h = maxH; w = h * a; }
+    return { id: it.id, x: cx - w / 2, y: top, w, h, z };
+  };
   const L = [];
-  const put = (it, x, y, w, h, z) => it && L.push({ id: it.id, x, y, w, h, z });
-  const torso = s.one_piece || s.base;
-  const hasOuter = !!s.outer;
-  const tx = hasOuter ? 44 : 20, tw = hasOuter ? 52 : 58;
-  if (s.outer) put(s.outer, 2, 4, 50, 52, 2);
-  if (s.one_piece) {
-    put(s.one_piece, tx, 3, tw, 82, 3);
-    if (s.mid) put(s.mid, tx - 4, 6, tw * 0.9, 42, 4);
-  } else if (s.mid && torso) {
-    put(torso, tx + 2, 1, tw - 4, 46, 3);      // behind, shifted up: collar shows
-    put(s.mid, tx, 7, tw, 44, 4);
-  } else put(s.mid || torso, tx, 4, tw, 46, 4);
-  if (s.bottom) put(s.bottom, hasOuter ? 30 : 24, 44, 42, 54, 1);
-  if (s.shoes) put(s.shoes, 66, 78, 32, 20, 5);
-  (s.accessories || []).forEach((a, i) => put(a, 76, 48 + i * 11, 22, 12, 6 + i));
-  return L;
+  const cx = s.outer ? (accs.length ? 54 : 60) : (accs.length ? 42 : 50);
+  const torso = s.mid || s.one_piece || s.base;
+  const under = s.mid ? (s.one_piece || s.base) : null;
+  let t = null;
+  if (s.one_piece && s.mid) {
+    L.push(box(s.one_piece, cx, 4, 44, 92, 3));
+    t = box(s.mid, cx, 6, 48, 46, 4);
+  } else if (torso) {
+    t = box(torso, cx, under ? 9 : 4, s.one_piece ? 44 : 50, s.one_piece ? 92 : 52, 4);
+    if (under) {
+      const shows = under.neckline === 'collared' || s.mid.front === 'open' || s.mid.sleeve === 'none';
+      if (shows) L.push(box(under, cx, t.y - 6, t.w * 0.96, 60, 3)); // behind, shifted up: collar shows
+      else { const u = box(under, 0, t.y - 4, t.w * 0.8, 48, 3); u.x = Math.max(1, t.x - u.w * 0.45); L.push(u); } // hidden layer: tucked beside it
+    }
+  }
+  if (t) L.push(t);
+  let bot = null;
+  if (s.bottom) {
+    const top = t ? t.y + t.h * 0.78 : 30;
+    bot = box(s.bottom, cx, top, 44, Math.min(72, BOARD_H - 3 - top), 1);
+    L.push(bot);
+  }
+  if (s.outer) {
+    const o = box(s.outer, 0, 6, 46, 64, 2);
+    o.x = Math.max(1, (t ? t.x : cx - 20) - o.w + 14);
+    L.push(o);
+  }
+  let shoesTop = BOARD_H;
+  if (s.shoes) {
+    const sh = box(s.shoes, 0, 0, 27, 22, 5);
+    sh.y = bot ? Math.min(BOARD_H - 2 - sh.h, bot.y + bot.h - sh.h * 0.35) : BOARD_H - 2 - sh.h; // by the trouser hems
+    sh.x = Math.min(100 - sh.w - 1, bot ? bot.x + bot.w - 8 : cx + 8);
+    shoesTop = sh.y;
+    L.push(sh);
+  }
+  // accessories: a column on the right, overflowing to the bottom-left
+  const colR = t ? t.x + t.w : 75;
+  const colW = Math.max(14, 99 - colR);
+  let y = 3, yLeft = BOARD_H - 3;
+  accs.forEach((a, i) => {
+    const w = Math.min(ACC_W[a.acc?.slot] || 16, colW);
+    const b = box(a, 0, 0, w, 20, 6 + i);
+    if (y + b.h < shoesTop - 2) { b.x = 99 - Math.max(b.w, (colW + b.w) / 2); b.y = y; y += b.h + 2; }
+    else { b.x = 2 + (i % 2) * 14; yLeft -= b.h + 2; b.y = yLeft; }
+    L.push(b);
+  });
+  // scale and centre the whole arrangement so it fills the board without clipping
+  if (L.length) {
+    const x0 = Math.min(...L.map((l) => l.x)), x1 = Math.max(...L.map((l) => l.x + l.w));
+    const y0 = Math.min(...L.map((l) => l.y)), y1 = Math.max(...L.map((l) => l.y + l.h));
+    const k = Math.min(94 / (x1 - x0), (BOARD_H - 6) / (y1 - y0), 1.3);
+    const dx = (100 - (x1 - x0) * k) / 2 - x0 * k, dy = (BOARD_H - (y1 - y0) * k) / 2 - y0 * k;
+    L.forEach((l) => { l.x = l.x * k + dx; l.y = l.y * k + dy; l.w *= k; l.h *= k; });
+  }
+  // to percentages of the board
+  return L.map((l) => ({ id: l.id, x: l.x, y: (l.y / BOARD_H) * 100, w: l.w, h: (l.h / BOARD_H) * 100, z: l.z, v: 2 }));
 }
 
+/** Saved layouts from the editor carry v:2; anything older is re-laid out. */
+const usable = (layout) => layout?.length && layout.every((l) => l.v === 2);
+
 export function Board({ items, layout, slots, onClick, className = '', children }) {
-  const lay = layout?.length ? layout : autoLayout(items, slots);
+  useAspects(items);
+  const lay = usable(layout) ? layout : autoLayout(items, slots);
   const byId = new Map(items.map((i) => [i.id, i]));
   return html`<div class=${'board ' + className} onClick=${onClick}>
     ${lay.filter((l) => byId.has(l.id)).sort((a, b) => a.z - b.z).map((l) => html`

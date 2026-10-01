@@ -1,4 +1,4 @@
-import { html, useState, useEffect } from '../lib/deps.js';
+import { html, useState, useEffect, useRef } from '../lib/deps.js';
 import { useStore, addItem, saveItem, deleteItem, logWear, me, settings } from '../lib/store.js';
 import { uploadImage } from '../lib/db.js';
 import { prepare, removeBackground, finalize, toAiDataUrl } from '../lib/images.js';
@@ -7,7 +7,6 @@ import { Header, Icon, Chips, Toggle, navigate, toast, confirmAsk, money, Spinne
 import { StatusPicker } from './closet.js';
 import { CATEGORIES, CATEGORY_LABELS, SUBCATS_BY_CATEGORY, SUBCATEGORIES, PATTERNS, PATTERN_SCALES, TEXTURES, FITS, SEASONS, STYLE_TAGS, NECKLINES } from '../styling/taxonomy.js';
 import { colorName } from '../styling/color.js';
-import { wearLimitFor, wearsLeft } from '../styling/laundry.js';
 import { describe } from '../styling/layering.js';
 
 const ENGINE_FIELDS = ['layer_roles', 'neckline', 'front', 'sleeve', 'hem_length', 'thickness', 'warmth', 'formality', 'fit', 'needs_base', 'water_resistant'];
@@ -21,15 +20,20 @@ export function AddItemsView() {
 
   const patch = (id, p) => setQueue((q) => q.map((e) => (e.id === id ? { ...e, ...(typeof p === 'function' ? p(e) : p) } : e)));
 
+  // Cut-outs run one after another on this device; AI tagging runs in its own queue
+  // behind them, one request at a time, waiting politely when Groq says "too many requests".
+  const aiQueue = useRef(Promise.resolve());
+
   async function onFiles(files) {
     const entries = [...files].map((f) => ({ id: Math.random().toString(36).slice(2), file: f, stage: 'Waiting…', preview: URL.createObjectURL(f), form: null }));
     setQueue((q) => [...q, ...entries]);
     setRunning(true);
-    for (const e of entries) await processOne(e);
+    for (const e of entries) await cutOut(e);
+    await aiQueue.current;
     setRunning(false);
   }
 
-  async function processOne(e) {
+  async function cutOut(e) {
     try {
       patch(e.id, { stage: 'Preparing…' });
       let blob = await prepare(e.file);
@@ -38,22 +42,30 @@ export function AddItemsView() {
         catch (err) { console.warn(err); toast('Background removal failed — keeping the original photo', 'error'); }
       }
       const fin = await finalize(blob);
-      const preview = URL.createObjectURL(fin.blob);
-      let form = { category: 'top', subcategory: '', name: '', colors: fin.palette.length ? fin.palette : [{ hex: '#808080', name: 'grey', share: 1 }], pattern: 'solid', pattern_scale: 'none', seasons: [], style_tags: [] };
-      patch(e.id, { stage: useAi ? 'AI is looking at it…' : 'Ready', preview, blob: fin.blob, form });
+      const form = { category: 'top', subcategory: '', name: '', colors: fin.palette.length ? fin.palette : [{ hex: '#808080', name: 'grey', share: 1 }], pattern: 'solid', pattern_scale: 'none', seasons: [], style_tags: [] };
+      const ready = { preview: URL.createObjectURL(fin.blob), blob: fin.blob, form, aspect: fin.width / fin.height, palette: fin.palette };
       if (useAi) {
-        try {
-          const t = await tagItem(await toAiDataUrl(fin.blob));
-          const colors = fin.palette.length
-            ? fin.palette.map((p, i) => ({ ...p, name: t.colors?.[i]?.name || p.name }))
-            : form.colors;
-          form = { ...form, ...withDefaults(t.subcategory, {}), ...clean(t), colors };
-        } catch (err) { toast('AI tagging failed: ' + err.message, 'error'); }
-      }
-      patch(e.id, { stage: 'Ready', form: form.subcategory ? { ...withDefaults(form.subcategory, {}), ...form } : form });
+        patch(e.id, { ...ready, stage: 'Queued for AI…' });
+        aiQueue.current = aiQueue.current.then(() => tag(e.id, ready));
+      } else patch(e.id, { ...ready, stage: 'Ready' });
     } catch (err) {
       patch(e.id, { stage: 'Failed: ' + err.message });
     }
+  }
+
+  async function tag(id, { blob, form, palette }) {
+    patch(id, { stage: 'AI is looking at it…', aiFailed: false });
+    try {
+      const t = await tagItem(await toAiDataUrl(blob), {
+        onWait: (s) => patch(id, { stage: s ? `AI is busy (free tier limit) — retrying in ${s}s…` : 'AI is looking at it…' }),
+      });
+      const colors = palette.length ? palette.map((p, i) => ({ ...p, name: t.colors?.[i]?.name || p.name })) : form.colors;
+      const f = { ...form, ...withDefaults(t.subcategory, {}), ...clean(t), colors };
+      patch(id, { stage: 'Ready', form: f.subcategory ? { ...withDefaults(f.subcategory, {}), ...f } : f });
+    } catch (err) {
+      patch(id, { stage: 'Ready', aiFailed: err.message });
+    }
+    await new Promise((r) => setTimeout(r, 400)); // small gap between requests
   }
 
   async function save(e) {
@@ -61,7 +73,7 @@ export function AddItemsView() {
     patch(e.id, { saving: true });
     try {
       const url = await uploadImage(e.blob, me());
-      await addItem({ ...e.form, image_url: url, wear_limit: e.form.wear_limit ?? wearLimitFor(e.form) });
+      await addItem({ ...e.form, image_url: url, aspect: e.aspect });
       setQueue((q) => q.filter((x) => x.id !== e.id));
       toast('Added to your closet');
     } catch (err) { toast(err, 'error'); patch(e.id, { saving: false }); }
@@ -96,6 +108,7 @@ export function AddItemsView() {
         </div>
         <button class="icon-btn" aria-label="Discard" onClick=${() => setQueue((q) => q.filter((x) => x.id !== e.id))}><${Icon} name="close" /></button>
       </div>
+      ${e.aiFailed && e.stage === 'Ready' ? html`<div class="notice warn small">AI couldn't tag this one (${e.aiFailed}). <button class="link" onClick=${() => { aiQueue.current = aiQueue.current.then(() => tag(e.id, e)); }}>Try again</button> or fill it in.</div>` : null}
       ${e.form && e.stage === 'Ready' ? html`
         <${ItemForm} value=${e.form} onChange=${(f) => patch(e.id, { form: f })} compact />
         <button class="btn primary wide" disabled=${e.saving} onClick=${() => save(e)}>${e.saving ? 'Saving…' : 'Save to closet'}</button>` : null}
@@ -109,7 +122,6 @@ function withDefaults(sub, cur) {
   if (!d) return cur;
   const out = { ...cur, category: d.category };
   for (const k of ENGINE_FIELDS) out[k] = d[k];
-  out.wear_limit = d.wear_limit;
   return out;
 }
 
@@ -150,7 +162,6 @@ export function ItemForm({ value: v, onChange, compact }) {
     ${adv ? html`
       <div class="row gap">
         <label class="grow">Fit<select value=${v.fit} onChange=${(e) => set('fit', e.target.value)}>${FITS.map((p) => html`<option>${p}</option>`)}</select></label>
-        <label class="grow">Wears before wash<input type="number" min="1" max="999" value=${v.wear_limit ?? ''} onInput=${(e) => set('wear_limit', Number(e.target.value) || null)} /></label>
       </div>
       ${num('formality', 0, 5, 0.5, 'Formality', '0 lounge · 1 casual · 2.5 smart casual · 4 business · 5 formal')}
       ${num('warmth', 0, 7, 0.5, 'Warmth', 'tee 1 · knit 3 · wool coat 5 · puffer 6')}
@@ -196,7 +207,6 @@ export function ItemView({ id }) {
 
   const cur = settings().currency;
   const cpw = item.price && item.wear_count ? item.price / item.wear_count : null;
-  const limit = wearLimitFor(item);
 
   async function saveEdit() {
     setBusy(true);
@@ -227,7 +237,7 @@ export function ItemView({ id }) {
       <div class="card">
         <div class="label">Laundry</div>
         <${StatusPicker} item=${item} />
-        <p class="muted small">${item.status === 'clean' ? (limit >= 100 ? 'Doesn\'t need regular washing.' : `${wearsLeft(item)} of ${limit} wears left before it needs a wash.`) : 'Left out of outfit suggestions until it\'s clean.'}</p>
+        <p class="muted small">${item.status === 'clean' ? `Worn ${item.wears_since_wash || 0}× since it was last washed.` : 'Left out of outfit suggestions until it\'s clean.'}</p>
       </div>
       <div class="stats-row">
         <div><b>${item.wear_count || 0}</b><span>wears</span></div>

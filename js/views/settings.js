@@ -1,5 +1,5 @@
 import { html, useState } from '../lib/deps.js';
-import { useStore, saveProfile, settings, saveSettings, exportData, deleteAccount, me } from '../lib/store.js';
+import { useStore, saveProfile, settings, saveSettings, exportData, deleteAccount, me, tasteEvents, tasteSummary } from '../lib/store.js';
 import { auth, isLocal, uploadImage } from '../lib/db.js';
 import { localGroqKey } from '../lib/ai.js';
 import { geocode, currentPosition } from '../lib/weather.js';
@@ -49,6 +49,19 @@ export function SettingsView() {
       <h3>Your style</h3>
       <p class="muted small">Outfits that match these score higher. Pick a few.</p>
       <${Chips} small multi value=${profile.style_profile || []} onChange=${(v) => saveProfile({ style_profile: v })} options=${STYLE_TAGS} />
+    </section>
+
+    <section class="card">
+      <h3>Your taste</h3>
+      ${(() => {
+        const ev = tasteEvents(), t = tasteSummary();
+        const likes = ev.filter((e) => e.s > 0).length, dislikes = ev.length - likes;
+        return html`<p class="muted small">Tap 👍 / 👎 on any outfit. Suggestions and the stylist learn from it. ${likes} liked · ${dislikes} disliked so far.</p>
+          ${t.likes.length ? html`<div class="label">You tend to like</div><p class="small">${t.likes.join(' · ')}</p>` : null}
+          ${t.dislikes.length ? html`<div class="label">You tend to avoid</div><p class="small">${t.dislikes.join(' · ')}</p>` : null}
+          ${ev.length ? html`<button class="btn small" onClick=${() => confirmAsk('Forget everything you\'ve liked and disliked?') && saveS({ taste: [] })}>Reset what it learned</button>` : null}`;
+      })()}
+      <div class="mt"><${Toggle} checked=${s.suggestAccessories !== false} onChange=${(c) => saveS({ suggestAccessories: c })} label="Add accessories to suggestions (hats, AirPods, watch, belt, bag…)" /></div>
     </section>
 
     <section class="card form">

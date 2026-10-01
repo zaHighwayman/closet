@@ -41,7 +41,7 @@ function underOuter(inner, outer) {
   return 'ok';
 }
 
-const COMPAT_SCORE = { good: 0.6, ok: 0, bad: -1.4 };
+const COMPAT_SCORE = { good: 0.25, ok: 0, bad: -1.4 }; // a good layer is nice, not a reason to layer everything
 
 export function describe(item) {
   let c = item.colors?.[0]?.name || '';

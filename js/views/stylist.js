@@ -1,5 +1,5 @@
 import { html, useState, useEffect, useRef } from '../lib/deps.js';
-import { useStore, settings, me, recentCombos } from '../lib/store.js';
+import { useStore, settings, me, recentCombos, tasteSummary } from '../lib/store.js';
 import { generate, gapAnalysis } from '../styling/engine.js';
 import { OCCASIONS } from '../styling/taxonomy.js';
 import { describe } from '../styling/layering.js';
@@ -29,7 +29,7 @@ export function StylistView() {
   const [busy, setBusy] = useState(false);
   const endRef = useRef(null);
   const occasionRef = useRef(settings().occasion);
-  const { actions, sheet } = useOutfitActions(items, occasionRef.current);
+  const { actions, sheet } = useOutfitActions(items, occasionRef.current, '/stylist');
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs.length, busy]);
 
@@ -77,6 +77,7 @@ export function StylistView() {
         `Setting: ${wx.mode === 'indoor' ? `mostly indoors (~${wx.indoorTemp}°C), forecast ignored` : wx.dayProfile === 'mixed' ? 'inside with some time outdoors' : 'mostly outside'}.`,
         `Occasion: ${OCCASIONS[occasion].label}.`,
         profile.style_profile?.length ? `Their style: ${profile.style_profile.join(', ')}.` : '',
+        (() => { const t = tasteSummary(); return t.likes.length || t.dislikes.length ? `Learned from their 👍/👎 — likes: ${t.likes.join('; ') || '–'}. Dislikes: ${t.dislikes.join('; ') || '–'}. Respect these.` : ''; })(),
         dirtyAsked.length ? `They asked for ${dirtyAsked.map(lookup).join(', ')} but it's in the laundry.` : '',
         intent.notes ? `Other wishes: ${intent.notes}` : '',
         gaps,

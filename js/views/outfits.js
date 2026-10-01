@@ -4,8 +4,8 @@ import * as db from '../lib/db.js';
 import { rateItems } from '../styling/engine.js';
 import { OCCASIONS, CATEGORIES, CATEGORY_LABELS } from '../styling/taxonomy.js';
 import { baseContext } from '../ui/hooks.js';
-import { Header, Icon, Chips, Board, Rating, Reasons, Sheet, ItemThumb, Empty, Spinner, Toggle, navigate, toast, confirmAsk, autoLayout, useAsync } from '../ui/components.js';
-import { HARMONY } from './style.js';
+import { Header, Icon, Chips, Board, Rating, Reasons, Sheet, ItemThumb, Empty, Spinner, Toggle, navigate, toast, confirmAsk, autoLayout, useAsync, useAspects } from '../ui/components.js';
+import { HARMONY, TasteButtons } from './style.js';
 
 export function OutfitsView() {
   const { outfits, items, collections } = useStore();
@@ -57,14 +57,14 @@ export function OutfitView({ id }) {
 
   return html`
     <${Header} title=${o.name || 'Outfit'} backTo="" sub=${o.author ? html`by <a href=${'#/u/' + o.author.username}>@${o.author.username}</a>` : (OCCASIONS[o.occasion]?.label || '')}
-      right=${isMine ? html`<button class="icon-btn" aria-label="Edit" onClick=${() => navigate('/builder/' + o.id)}><${Icon} name="edit" /></button>` : null} />
+      right=${isMine ? html`<button class="icon-btn" aria-label="Edit" onClick=${() => navigate('/builder/' + o.id + '?from=/outfits')}><${Icon} name="edit" /></button>` : null} />
     <${Board} items=${its} layout=${o.layout} className="big" />
-    ${rating && !rating.invalid ? html`<div class="card"><div class="row"><${Rating} value=${rating.rating} /><span class="muted small">${HARMONY[rating.harmony]}</span></div><${Reasons} reasons=${rating.reasons} warnings=${rating.warnings} max=${5} /></div>` : null}
+    ${rating && !rating.invalid ? html`<div class="card"><div class="row"><${Rating} value=${rating.rating} /><span class="muted small grow">${HARMONY[rating.harmony]}</span>${isMine ? html`<${TasteButtons} ids=${o.item_ids} />` : null}</div><${Reasons} reasons=${rating.reasons} warnings=${rating.warnings} max=${5} /></div>` : null}
     ${rating?.invalid ? html`<div class="card"><${Reasons} warnings=${rating.warnings} /></div>` : null}
     <div class="strip">${its.map((it) => html`<${ItemThumb} small item=${it} onClick=${() => isMine && navigate('/item/' + it.id)} />`)}</div>
     ${isMine ? html`
       <div class="actions">
-        <button class="btn primary" disabled=${its.some((i) => i.status !== 'clean')} onClick=${async () => { await logWear(o.item_ids, { outfitId: o.id }); toast('Logged as worn today — laundry updated'); }}>Wear today</button>
+        <button class="btn primary" disabled=${its.some((i) => i.status !== 'clean')} onClick=${async () => { await logWear(o.item_ids, { outfitId: o.id }); toast('Logged as worn today'); }}>Wear today</button>
         <button class="btn" onClick=${() => setPlan(true)}>Plan</button>
       </div>
       ${its.some((i) => i.status !== 'clean') ? html`<p class="muted small center">Some pieces are in the laundry.</p>` : null}
@@ -93,7 +93,9 @@ export function BuilderView({ id, query }) {
   const initSlots = query.slots ? JSON.parse(query.slots) : null;
   const byId = new Map(st.items.map((i) => [i.id, i]));
   const [ids, setIds] = useState(initIds.filter((x) => byId.has(x)));
-  const [layout, setLayout] = useState(() => existing?.layout?.length ? existing.layout : autoLayout(initIds.map((x) => byId.get(x)).filter(Boolean), initSlots));
+  const custom = existing?.layout?.length && existing.layout.every((l) => l.v === 2);
+  const [layout, setLayout] = useState(() => custom ? existing.layout : autoLayout(initIds.map((x) => byId.get(x)).filter(Boolean), initSlots));
+  const touched = useRef(!!custom); // once you arrange things by hand, auto-layout leaves them alone
   const [sel, setSel] = useState(null);
   const [cat, setCat] = useState('top');
   const [occasion, setOccasion] = useState(existing?.occasion || query.occasion || 'casual');
@@ -106,6 +108,8 @@ export function BuilderView({ id, query }) {
   const drag = useRef(null);
 
   const its = ids.map((x) => byId.get(x)).filter(Boolean);
+  const aspectsVersion = useAspects(its);
+  useEffect(() => { if (!touched.current && its.length) setLayout(autoLayout(its, initSlots && ids.join() === initIds.join() ? initSlots : null)); }, [aspectsVersion]);
   const rating = useMemo(() => (its.length >= 2 ? rateItems(its, baseContext({ occasion })) : null), [ids.join(), occasion]);
 
   function add(it) {
@@ -113,19 +117,21 @@ export function BuilderView({ id, query }) {
     const next = [...ids, it.id];
     setIds(next);
     const auto = autoLayout(next.map((x) => byId.get(x)));
-    const spot = auto.find((l) => l.id === it.id);
-    setLayout([...layout, { ...spot, z: Math.max(0, ...layout.map((l) => l.z)) + 1 }]);
+    if (!touched.current) setLayout(auto); // still auto-arranged: re-flow everything
+    else setLayout([...layout, { ...auto.find((l) => l.id === it.id), z: Math.max(0, ...layout.map((l) => l.z)) + 1 }]);
     setSel(it.id);
   }
   function remove(itemId) {
-    setIds(ids.filter((x) => x !== itemId));
-    setLayout(layout.filter((l) => l.id !== itemId));
+    const next = ids.filter((x) => x !== itemId);
+    setIds(next);
+    setLayout(touched.current ? layout.filter((l) => l.id !== itemId) : autoLayout(next.map((x) => byId.get(x))));
     setSel(null);
   }
   const upd = (itemId, p) => setLayout((L) => L.map((l) => (l.id === itemId ? { ...l, ...p } : l)));
 
   function onDown(e, l) {
     e.preventDefault();
+    touched.current = true;
     setSel(l.id);
     const r = boardRef.current.getBoundingClientRect();
     drag.current = { id: l.id, sx: e.clientX, sy: e.clientY, x: l.x, y: l.y, W: r.width, H: r.height };
@@ -144,8 +150,8 @@ export function BuilderView({ id, query }) {
     try {
       const saved = await saveOutfit({ ...(existing || {}), id: existing?.id, name, item_ids: ids, layout, occasion, visibility: vis, collection_id: colId || null,
         rating: rating?.rating ?? null, reasons: rating?.reasons?.slice(0, 5) || [] });
-      toast('Outfit saved');
-      navigate('/outfit/' + saved.id);
+      toast(html`Outfit saved · <a href=${'#/outfit/' + saved.id}>open</a>`);
+      navigate(query.from || '/outfits', { replace: true });
     } catch (e) { toast(e, 'error'); }
     setSaving(false);
   }
@@ -159,11 +165,11 @@ export function BuilderView({ id, query }) {
       ${!ids.length ? html`<div class="board-hint">Tap clothes below to add them, then drag to arrange</div>` : null}
     </div>
     ${selL ? html`<div class="row gap edit-tools">
-      <label class="range grow">Size<input type="range" min="10" max="90" value=${selL.w} onInput=${(e) => { const w = Number(e.target.value); upd(sel, { w, h: selL.h * (w / selL.w) }); }} /></label>
+      <label class="range grow">Size<input type="range" min="5" max="90" value=${selL.w} onInput=${(e) => { touched.current = true; const w = Number(e.target.value); upd(sel, { w, h: selL.h * (w / selL.w) }); }} /></label>
       <button class="icon-btn" aria-label="Bring forward" onClick=${() => upd(sel, { z: Math.max(...layout.map((l) => l.z)) + 1 })}><${Icon} name="up" /></button>
       <button class="icon-btn" aria-label="Send back" onClick=${() => upd(sel, { z: Math.min(...layout.map((l) => l.z)) - 1 })}><${Icon} name="down" /></button>
       <button class="icon-btn" aria-label="Remove" onClick=${() => remove(sel)}><${Icon} name="trash" /></button>
-    </div>` : html`<div class="row gap"><button class="btn small" disabled=${!ids.length} onClick=${() => setLayout(autoLayout(its))}>Auto-arrange</button>
+    </div>` : html`<div class="row gap"><button class="btn small" disabled=${!ids.length} onClick=${() => { touched.current = false; setLayout(autoLayout(its)); }}>Auto-arrange</button>
       <span class="grow"></span><select class="small" value=${occasion} onChange=${(e) => setOccasion(e.target.value)} aria-label="Occasion">${Object.entries(OCCASIONS).map(([k, v]) => html`<option value=${k}>${v.label}</option>`)}</select></div>`}
     ${rating ? html`<div class="card rating-live">
       ${rating.invalid ? html`<${Reasons} warnings=${rating.warnings} />` : html`<div class="row"><${Rating} value=${rating.rating} /><span class="muted small">${HARMONY[rating.harmony]}</span></div><${Reasons} reasons=${rating.reasons} warnings=${rating.warnings} max=${3} />`}

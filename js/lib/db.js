@@ -158,7 +158,9 @@ export async function invokeFunction(name, body) {
   if (error) {
     let msg = error.message;
     try { msg = (await error.context.json()).error || msg; } catch {}
-    throw new Error(msg);
+    const err = new Error(msg);
+    err.status = error.context?.status;
+    throw err;
   }
   return data;
 }

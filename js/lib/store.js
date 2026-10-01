@@ -2,9 +2,10 @@
 import { useEffect, useState } from './deps.js';
 import * as db from './db.js';
 import { FUNCTION_NAME } from '../config.js';
-import { applyWear, undoWear, markClean, wearLimitFor } from '../styling/laundry.js';
+import { applyWear, undoWear, markClean } from '../styling/laundry.js';
 import { normalizeItem } from '../styling/taxonomy.js';
 import { signature } from '../styling/engine.js';
+import { compileTaste, describeTaste } from '../styling/taste.js';
 
 // ------------------------------------------------------------------ tiny reactive store
 const state = { session: undefined, profile: null, items: null, outfits: null, collections: null };
@@ -27,6 +28,25 @@ export const settings = () => ({ ...DEFAULT_SETTINGS, ...(state.profile?.setting
 export async function saveSettings(patch) {
   return saveProfile({ settings: { ...settings(), ...patch } });
 }
+
+// ------------------------------------------------------------------ taste (👍 / 👎 on outfits)
+const sig = (ids) => [...ids].sort().join('|');
+export const tasteEvents = () => settings().taste || [];
+export const tasteOf = (ids) => tasteEvents().find((e) => sig(e.ids) === sig(ids))?.s || 0;
+/** s: 1 like, -1 dislike, 0 clear. Kept on the profile (last 400). */
+export async function rateOutfit(ids, s) {
+  const events = tasteEvents().filter((e) => sig(e.ids) !== sig(ids));
+  if (s) events.push({ ids: [...ids], s, t: Date.now() });
+  await saveSettings({ taste: events.slice(-400) });
+}
+let tasteCache = { key: '', model: null };
+export function tasteModel() {
+  const ev = tasteEvents();
+  const key = `${ev.length}:${ev[ev.length - 1]?.t || 0}:${state.items?.length || 0}`;
+  if (tasteCache.key !== key) tasteCache = { key, model: compileTaste(ev, new Map((state.items || []).map((i) => [i.id, i]))) };
+  return tasteCache.model;
+}
+export const tasteSummary = () => describeTaste(tasteModel(), new Map((state.items || []).map((i) => [i.id, i])));
 
 // ------------------------------------------------------------------ profile
 export async function loadProfile() {
@@ -129,7 +149,6 @@ export async function markPlannedWorn(entry) {
     if (it) await saveItem(id, applyWear(it, when));
   }
 }
-export { wearLimitFor };
 
 // ------------------------------------------------------------------ outfits & collections
 export async function loadOutfits() {

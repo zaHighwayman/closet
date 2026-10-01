@@ -78,7 +78,7 @@ function DaySheet({ date, entries, weatherDay, onClose, onChange }) {
       const its = e.item_ids.map((id) => byId.get(id)).filter(Boolean);
       return html`<div class="card">
         <div class="row"><b>${e.worn ? 'Worn' : 'Planned'}</b><span class="grow"></span>
-          ${!e.worn && isPast ? html`<button class="btn small primary" onClick=${() => run(() => markPlannedWorn(e), 'Marked worn — laundry updated')}>Mark worn</button>` : null}
+          ${!e.worn && isPast ? html`<button class="btn small primary" onClick=${() => run(() => markPlannedWorn(e), 'Marked worn')}>Mark worn</button>` : null}
           <button class="icon-btn" aria-label="Delete" onClick=${() => run(() => (e.worn ? unlogWear(e) : deleteCalendarEntry(e.id)), 'Removed')}><${Icon} name="trash" /></button></div>
         <${Board} items=${its} />
       </div>`;
@@ -92,7 +92,7 @@ function DaySheet({ date, entries, weatherDay, onClose, onChange }) {
       <div class="scroll-x"><${Chips} small value=${cat} onChange=${(c) => c && setCat(c)} options=${CATEGORIES.map((c) => [c, CATEGORY_LABELS[c]])} /></div>
       <div class="grid small">${st.items.filter((i) => i.category === cat).map((it) => html`<${ItemThumb} small item=${it} selected=${picked.includes(it.id)}
         onClick=${() => setPicked(picked.includes(it.id) ? picked.filter((x) => x !== it.id) : [...picked, it.id])} />`)}</div>
-      <button class="btn primary wide mt" disabled=${!picked.length} onClick=${() => run(() => logWear(picked, { date }), 'Logged — laundry updated').then(() => { setMode(null); setPicked([]); })}>Log ${picked.length} item${picked.length === 1 ? '' : 's'} as worn</button>` : null}
+      <button class="btn primary wide mt" disabled=${!picked.length} onClick=${() => run(() => logWear(picked, { date }), 'Logged').then(() => { setMode(null); setPicked([]); })}>Log ${picked.length} item${picked.length === 1 ? '' : 's'} as worn</button>` : null}
     ${mode === 'saved' ? html`<div class="grid outfits">${st.outfits.map((o) => html`<button class="outfit-tile" onClick=${() => run(() => (isPast ? logWear(o.item_ids, { date, outfitId: o.id }) : planOutfit(date, o.item_ids, o.id)), isPast ? 'Logged' : 'Planned').then(() => setMode(null))}>
       <${Board} items=${o.item_ids.map((id) => byId.get(id)).filter(Boolean)} layout=${o.layout} /><div class="cap">${o.name || OCCASIONS[o.occasion]?.label || 'Outfit'}</div></button>`)}</div>
       ${!st.outfits.length ? html`<p class="muted">No saved outfits yet.</p>` : null}` : null}
@@ -176,7 +176,7 @@ export function TripView({ id }) {
   const [trip, setTrip] = useState(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (t.data) setTrip(t.data); }, [t.data]);
-  const { actions, sheet } = useOutfitActions(st.items, trip?.settings?.occasion);
+  const { actions, sheet } = useOutfitActions(st.items, trip?.settings?.occasion, '/trip/' + id);
   if (t.loading && !trip) return html`<${Header} title="Trip" backTo="/trips" /><${Spinner} />`;
   if (!trip) return html`<${Header} title="Trip" backTo="/trips" /><${Empty} title="Trip not found" />`;
   const byId = new Map(st.items.map((i) => [i.id, i]));

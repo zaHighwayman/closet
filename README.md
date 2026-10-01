@@ -3,7 +3,7 @@
 A free, open wardrobe app in the spirit of Fitted, with every paid feature included and no subscriptions or credits:
 
 - **Digital closet.** Photograph clothes and the background is removed on your device. The AI then tags colour, fabric, fit, formality, warmth and layering.
-- **Laundry tracking.** Items can be clean, dirty or in the wash. Logging a wear counts toward each item's "wears before wash" limit, and the item moves to the dirty pile when it hits it. Outfits are only ever built from clean clothes.
+- **Laundry tracking.** Items can be clean, dirty or in the wash, and you decide when something is dirty; logging a wear only counts it. Clothes worn since their last wash collect under **Worn** in the Laundry screen. Outfits are only ever built from clean clothes.
 - **Style-theory outfits, not random ones.** Each outfit is scored on:
   - colour harmony: neutrals, analogous, complementary and triadic colours, 60/30/10 proportions, light/dark contrast
   - formality
@@ -17,6 +17,8 @@ A free, open wardrobe app in the spirit of Fitted, with every paid feature inclu
   Every outfit card lists the reasons behind its score.
 - **Layering.** The engine knows which pieces work as base, mid or outer layers, and which necklines can sit under which. A collared shirt under a crewneck knit is rewarded and the board shows the collar peeking out. A shirt under a hoodie is rejected. Thin layers have to go under thick ones.
 - **Weather on or off.** You can dress for the forecast, or for a day that's mostly inside with a short trip out. You can also ignore the weather completely (indoors at about 21 °C); on a cold day you then get a separate "commute layer" suggestion.
+- **Accessories with rules.** Hats, AirPods, watches, belts, ties, scarves, jewellery and bags are only added when they suit the outfit. A cap never goes with a preppy or collared-shirt outfit, a belt has to match your shoes, sunglasses need sun and a beanie needs cold.
+- **Learns your taste.** Tap 👍 or 👎 on any outfit and future suggestions and the stylist adjust to it.
 - **AI stylist chat** (Groq). It knows your clothes, the weather and what's in the wash. It only recommends outfits the style engine has already checked.
 - **Other features:**
   - manual outfit builder (drag, resize and layer pieces, with a live rating)
