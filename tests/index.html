@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Engine tests</title>
+<style>body{font:14px/1.5 system-ui,sans-serif;max-width:720px;margin:24px auto;padding:0 16px}.ok{color:#2a7a45}.bad{color:#b4382c}h1{font-size:20px}</style></head>
+<body>
+<h1>Style engine tests</h1>
+<div id="out">Running…</div>
+<script type="module">
+  await import('./engine.test.js');
+  const { pass, fail, results } = globalThis.__results;
+  document.getElementById('out').innerHTML = `<p><b>${pass} passed, ${fail} failed</b></p>` +
+    results.map((r) => `<div class="${r.ok ? 'ok' : 'bad'}">${r.ok ? '✓' : '✗'} ${r.name}${r.err ? ' — ' + r.err : ''}</div>`).join('');
+</script>
+</body>
+</html>
