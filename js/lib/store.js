@@ -1,6 +1,7 @@
 // App state + domain operations (closet, outfits, laundry, calendar, social, market).
 import { useEffect, useState } from './deps.js';
 import * as db from './db.js';
+import { FUNCTION_NAME } from '../config.js';
 import { applyWear, undoWear, markClean, wearLimitFor } from '../styling/laundry.js';
 import { normalizeItem } from '../styling/taxonomy.js';
 import { signature } from '../styling/engine.js';
@@ -290,6 +291,6 @@ export async function deleteAccount() {
     indexedDB.deleteDatabase('closet-demo');
     return;
   }
-  await db.invokeFunction('api', { action: 'delete_account' });
+  await db.invokeFunction(FUNCTION_NAME, { action: 'delete_account' });
   await db.auth.signOut();
 }

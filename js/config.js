@@ -4,4 +4,7 @@
 export const SUPABASE_URL = 'https://iryfilessozewwmyxdse.supabase.co';
 export const SUPABASE_ANON_KEY = 'sb_publishable_7C84Cah6JnxHudnlj6n-pg_dxwaiIkJ';
 
+// Name of the Edge Function you deployed from supabase/functions/api/index.ts
+export const FUNCTION_NAME = 'quick-responder';
+
 export const APP_NAME = 'Closet';

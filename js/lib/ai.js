@@ -1,6 +1,7 @@
 // AI features (Groq). In account mode requests go through the Supabase "api" function so the
 // key stays secret. In offline demo mode you can paste your own free Groq key in Settings.
 import * as db from './db.js';
+import { FUNCTION_NAME } from '../config.js';
 import { SUBCATEGORIES, PATTERNS, PATTERN_SCALES, TEXTURES, FITS, SEASONS, STYLE_TAGS, NECKLINES, OCCASIONS } from '../styling/taxonomy.js';
 import { describe } from '../styling/layering.js';
 
@@ -15,7 +16,7 @@ export const aiAvailable = () => !db.isLocal || !!localGroqKey.get();
 
 async function complete({ kind = 'text', messages, json = false, max_tokens = 1200, temperature = 0.4 }) {
   if (!db.isLocal) {
-    const r = await db.invokeFunction('api', { kind, messages, json, max_tokens, temperature });
+    const r = await db.invokeFunction(FUNCTION_NAME, { kind, messages, json, max_tokens, temperature });
     return r.content;
   }
   const key = localGroqKey.get();
