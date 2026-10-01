@@ -51,12 +51,12 @@ Then open http://localhost:8000.
 ### 1. Supabase (sign-in, database, photo storage)
 1. Create a free project at https://supabase.com.
 2. Open **SQL Editor → New query**, paste the whole of [`supabase/schema.sql`](supabase/schema.sql) and click **Run**.
-3. Open **Project Settings → API** and copy the **Project URL** and the **anon public** key into [`js/config.js`](js/config.js). The anon key is meant to be public; the security rules in the schema protect the data.
+3. Open **Project Settings → API Keys** and copy the **Project URL** and either the **anon** key (Legacy API keys tab) or the **publishable** key (`sb_publishable_…`) into [`js/config.js`](js/config.js). Both are meant to be public; the security rules in the schema protect the data. **Never** use the secret or `service_role` key there.
 
 ### 2. Groq (free AI)
 1. Create an API key at https://console.groq.com/keys.
 2. In Supabase open **Edge Functions → Deploy a new function → Via editor**. Name it `api`, paste [`supabase/functions/api/index.ts`](supabase/functions/api/index.ts) and deploy.
-3. Open **Edge Functions → Secrets** and add `GROQ_API_KEY` = your key.
+3. In the left sidebar open **Edge Functions → Secrets** tab (not Project Settings → API Keys, which makes Supabase's own keys). Under **Add new secret**, set the name to `GROQ_API_KEY` and the value to the `gsk_…` key from Groq, then click **Save**.
 
    The key lives only on the server; the browser never sees it. Each user can make 200 AI calls per day, which you can change with an `AI_DAILY_LIMIT` secret. Models can be overridden with the `GROQ_VISION_MODEL`, `GROQ_TEXT_MODEL` and `GROQ_FAST_MODEL` secrets. Check https://console.groq.com/docs/models if Groq retires one.
 
