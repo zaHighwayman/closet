@@ -54,7 +54,7 @@ export const inWishlist = (id) => wishlist().some((w) => w.id === id);
 export async function toggleWishlist(piece) {
   const list = wishlist();
   const next = list.some((w) => w.id === piece.id) ? list.filter((w) => w.id !== piece.id)
-    : [...list, { id: piece.id, name: piece.name, subcategory: piece.subcategory, color: piece.colors[0], image_url: piece.image_url, t: Date.now() }];
+    : [...list, { id: piece.id, name: piece.name, subcategory: piece.subcategory, color: piece.colors[0], photo: piece.photo || null, t: Date.now() }];
   await saveSettings({ wishlist: next.slice(-100) });
   return next.some((w) => w.id === piece.id);
 }

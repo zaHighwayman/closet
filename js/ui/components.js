@@ -143,30 +143,72 @@ export function ItemThumb({ item, onClick, selected, badge, small }) {
 const DEFAULT_ASPECT = { top: 0.95, outerwear: 0.85, bottom: 0.45, one_piece: 0.5, shoes: 1.9, accessory: 1, bag: 1 };
 const ACC_W = { head: 22, eyes: 20, ears: 11, wrist: 13, jewelry: 12, waist: 24, tie: 7, neck: 16, hands: 15, carry: 25 };
 const BOARD_H = 125; // board is 100 wide × 125 tall (4:5)
-const aspectCache = new Map();
-const aspectPending = new Set();
+// Per image: the garment's visible bounding box inside the photo (cut-outs often keep empty
+// margins or stray specks), so layout and sizing follow the actual garment.
+const shapeCache = new Map(); // url -> { aspect, crop:{x,y,w,h} } (crop in 0..1 of the image)
+const shapePending = new Set();
 const aspectListeners = new Set();
+const FULL = { x: 0, y: 0, w: 1, h: 1 };
 
-export const aspectOf = (it) => it.aspect || aspectCache.get(it.image_url) || DEFAULT_ASPECT[it.category] || 1;
+export const shapeOf = (it) => shapeCache.get(it.image_url) || { aspect: it.aspect || DEFAULT_ASPECT[it.category] || 1, crop: FULL };
+export const aspectOf = (it) => shapeOf(it).aspect;
+
+/** Bounding box of the visible garment: rows/columns with a meaningful amount of opaque pixels. */
+function contentBox(img) {
+  const W = img.naturalWidth, H = img.naturalHeight;
+  const k = Math.min(1, 200 / Math.max(W, H));
+  const w = Math.max(1, Math.round(W * k)), h = Math.max(1, Math.round(H * k));
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, w, h);
+  const d = ctx.getImageData(0, 0, w, h).data; // throws if the image isn't CORS-readable
+  const rows = new Array(h).fill(0), cols = new Array(w).fill(0);
+  let opaque = 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 60) { rows[y]++; cols[x]++; opaque++; }
+  if (opaque > w * h * 0.97 || opaque < 20) return FULL; // not a cut-out (or empty): use the whole photo
+  const rMin = Math.max(1, w * 0.02), cMin = Math.max(1, h * 0.02); // ignore specks and thin halos
+  let y0 = rows.findIndex((n) => n >= rMin), y1 = h - 1 - [...rows].reverse().findIndex((n) => n >= rMin);
+  let x0 = cols.findIndex((n) => n >= cMin), x1 = w - 1 - [...cols].reverse().findIndex((n) => n >= cMin);
+  if (y0 < 0 || x0 < 0 || y1 <= y0 || x1 <= x0) return FULL;
+  return { x: x0 / w, y: y0 / h, w: (x1 - x0 + 1) / w, h: (y1 - y0 + 1) / h };
+}
 
 function measure(url) {
-  if (!url || aspectCache.has(url) || aspectPending.has(url)) return;
-  aspectPending.add(url);
+  if (!url || shapeCache.has(url) || shapePending.has(url)) return;
+  shapePending.add(url);
   const img = new Image();
-  img.onload = () => { aspectCache.set(url, img.naturalWidth / img.naturalHeight || 1); aspectListeners.forEach((f) => f()); };
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    let crop = FULL;
+    try { crop = contentBox(img); } catch {}
+    const aspect = ((img.naturalWidth || 1) * crop.w) / ((img.naturalHeight || 1) * crop.h) || 1;
+    shapeCache.set(url, { aspect, crop });
+    aspectListeners.forEach((f) => f());
+  };
+  img.onerror = () => shapePending.delete(url);
   img.src = url;
 }
 
-/** Re-render once the real image proportions are known. */
+/** Re-render once the real garment shapes are known. */
 export function useAspects(items) {
   const [v, force] = useState(0);
   useEffect(() => {
     const f = () => force((n) => n + 1);
     aspectListeners.add(f);
-    items.forEach((i) => !i.aspect && measure(i.image_url));
+    items.forEach((i) => measure(i.image_url));
     return () => aspectListeners.delete(f);
   }, [items.map((i) => i.id).join()]);
   return v;
+}
+
+/** One garment on a board: the box is the visible garment; the photo is stretched so its margins fall outside it. */
+export function Piece({ item, l, cls = '', onPointerDown }) {
+  const c = shapeOf(item).crop;
+  const img = `left:${(-c.x / c.w) * 100}%;top:${(-c.y / c.h) * 100}%;width:${100 / c.w}%;height:${100 / c.h}%`;
+  return html`<div class=${'piece ' + cls} onPointerDown=${onPointerDown}
+    style=${`left:${l.x}%;top:${l.y}%;width:${l.w}%;height:${l.h}%;z-index:${l.z}`}>
+    <img src=${item.image_url} alt=${item.name || ''} loading="lazy" draggable="false" style=${img} />
+  </div>`;
 }
 
 export function autoLayout(items, slotIds = null) {
@@ -253,9 +295,7 @@ export function Board({ items, layout, slots, onClick, className = '', children 
   const lay = usable(layout) ? layout : autoLayout(items, slots);
   const byId = new Map(items.map((i) => [i.id, i]));
   return html`<div class=${'board ' + className} onClick=${onClick}>
-    ${lay.filter((l) => byId.has(l.id)).sort((a, b) => a.z - b.z).map((l) => html`
-      <img src=${byId.get(l.id).image_url} alt=${byId.get(l.id).name || ''} loading="lazy" draggable="false"
-        style=${`left:${l.x}%;top:${l.y}%;width:${l.w}%;height:${l.h}%;z-index:${l.z}`} />`)}
+    ${lay.filter((l) => byId.has(l.id)).sort((a, b) => a.z - b.z).map((l) => html`<${Piece} key=${l.id} item=${byId.get(l.id)} l=${l} />`)}
     ${children}
   </div>`;
 }

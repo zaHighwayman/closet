@@ -96,11 +96,19 @@ export function buildCatalog(rawOwned, { season } = {}) {
       out.push(normalizeItem({
         id: `v:${sub}:${col.name}`, virtual: true, status: 'clean', subcategory: sub, category: def.category,
         name: `${col.name} ${sub}`, colors: [{ ...col, share: 1 }], style_tags: tags, material, image_url: url, aspect,
+        photo: CATALOG_PHOTOS.has(sub) ? photoPath(sub) : null, // grey product photo, recoloured in the browser
       }));
     }
   }
   return out;
 }
+
+// clothing types that have a product photo in img/catalog/
+export const CATALOG_PHOTOS = new Set(['t-shirt', 'long-sleeve tee', 'polo', 'oxford shirt', 'casual shirt', 'dress shirt', 'turtleneck', 'henley',
+  'crewneck sweater', 'v-neck sweater', 'quarter-zip', 'cardigan', 'sweatshirt', 'hoodie', 'overshirt', 'blazer', 'denim jacket', 'bomber jacket',
+  'leather jacket', 'chore jacket', 'trench coat', 'wool coat', 'puffer jacket', 'jeans', 'chinos', 'trousers', 'cargo pants', 'joggers', 'shorts',
+  'skirt', 'dress', 'sneakers', 'loafers', 'derbies', 'chelsea boots', 'boots', 'heels']);
+export const photoPath = (sub) => `img/catalog/${sub.replace(/[^a-z0-9]+/g, '-')}.webp`;
 
 export const isVirtual = (id) => typeof id === 'string' && id.startsWith('v:');
 export const shopLink = (name) => `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(name)}`;

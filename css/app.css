@@ -189,11 +189,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 
 /* boards & outfits */
 .board { position: relative; aspect-ratio: 4 / 5; background: var(--board); border-radius: var(--radius); overflow: hidden; }
-.board img { position: absolute; object-fit: contain; pointer-events: none; filter: drop-shadow(0 3px 5px rgba(0,0,0,.14)); }
+.board .piece { position: absolute; pointer-events: none; }
+.board .piece img { position: absolute; max-width: none; object-fit: fill; pointer-events: none; filter: drop-shadow(0 3px 5px rgba(0,0,0,.14)); }
 .board.big { max-width: 460px; width: 100%; align-self: center; }
 .board.edit { touch-action: none; max-width: 460px; width: 100%; align-self: center; }
-.board.edit img { pointer-events: auto; cursor: grab; touch-action: none; }
-.board.edit img.sel { outline: 2px dashed var(--accent); outline-offset: 2px; }
+.board.edit .piece { pointer-events: auto; cursor: grab; touch-action: none; }
+.board.edit .piece.sel { outline: 2px dashed var(--accent); outline-offset: 2px; }
 .board-hint { position: absolute; inset: 0; display: grid; place-items: center; color: #77716a; padding: 30px; text-align: center; }
 .edit-tools { background: var(--surface); padding: 6px 10px; border-radius: 12px; }
 .outfit-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }

@@ -1,12 +1,28 @@
 import { html, useState, useEffect, useRef, useMemo } from '../lib/deps.js';
 import { useStore, settings, wishlist, inWishlist, toggleWishlist } from '../lib/store.js';
 import { buildCatalog, discoverBatch, shopLink } from '../styling/catalog.js';
+import { recolor } from '../lib/recolor.js';
 import { OCCASIONS, seasonFor } from '../styling/taxonomy.js';
 import { baseContext } from '../ui/hooks.js';
 import { Header, Icon, Chips, Board, Rating, Reasons, Sheet, Empty, Spinner, navigate, toast } from '../ui/components.js';
 import { TasteButtons } from './style.js';
 
 const MIX = ['casual', 'smart casual', 'date', 'casual', 'work', 'smart casual'];
+
+/** Swap a piece's silhouette for its recoloured product photo (once; silhouette stays if the photo is missing). */
+async function withPhoto(v) {
+  if (!v.photo || v.photoReady) return v;
+  try { v.image_url = await recolor(v.photo, v.colors[0].hex); v.aspect = undefined; } catch {}
+  v.photoReady = true;
+  return v;
+}
+
+/** Product photo for a saved wishlist piece. */
+function WishImg({ w }) {
+  const [src, setSrc] = useState(w.image_url || null);
+  useEffect(() => { if (w.photo) recolor(w.photo, w.color.hex).then(setSrc).catch(() => {}); }, [w.id]);
+  return src ? html`<img src=${src} alt="" />` : html`<span class="swatch big" style=${'background:' + w.color.hex}></span>`;
+}
 
 function WishButton({ piece, onChange }) {
   const [on, setOn] = useState(() => inWishlist(piece.id));
@@ -60,11 +76,12 @@ export function DiscoverView() {
   function loadMore() {
     if (loading || done) return;
     setLoading(true);
-    setTimeout(() => { // let the spinner paint before crunching
+    setTimeout(async () => { // let the spinner paint before crunching
       const s = st.current;
       const occ = occasion === 'mix' ? MIX[s.seed % MIX.length] : occasion;
       const batch = discoverBatch(items, catalog, baseContext({ occasion: occ, season, weather: { mode: 'indoor' } }),
         { seed: s.seed++ * 104729, seen: s.seen, featured: s.featured, size: 6 });
+      await Promise.all(batch.flatMap((b) => b.missing.map(withPhoto)));
       s.empty = batch.length ? 0 : s.empty + 1;
       if (s.empty >= 4) setDone(true);
       setFeed((f) => [...f, ...batch.map((b) => ({ ...b, occasion: occ }))]);
@@ -114,7 +131,7 @@ function WishlistSheet({ open, onClose, counts }) {
   return html`<${Sheet} open=${open} onClose=${onClose} title="Wishlist">
     ${list.length ? html`<p class="muted small">Pieces you saved from Discover, the most useful first.</p>
       <div class="list">${list.map((w) => html`<div class="list-row">
-        <img src=${w.image_url} alt="" />
+        <${WishImg} w=${w} />
         <span class="grow"><b>${w.name}</b>${counts.get(w.id) > 1 ? html`<div class="muted small">in ${counts.get(w.id)} ideas you've seen</div>` : null}</span>
         <a class="btn small" href=${shopLink(w.name)} target="_blank" rel="noopener">Find it</a>
         <button class="icon-btn" aria-label="Remove" onClick=${async () => { await toggleWishlist({ ...w, colors: [w.color] }); force((n) => n + 1); }}><${Icon} name="trash" /></button>

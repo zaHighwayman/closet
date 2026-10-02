@@ -4,7 +4,7 @@ import * as db from '../lib/db.js';
 import { rateItems } from '../styling/engine.js';
 import { OCCASIONS, CATEGORIES, CATEGORY_LABELS } from '../styling/taxonomy.js';
 import { baseContext } from '../ui/hooks.js';
-import { Header, Icon, Chips, Board, Rating, Reasons, Sheet, ItemThumb, Empty, Spinner, Toggle, navigate, toast, confirmAsk, autoLayout, useAsync, useAspects } from '../ui/components.js';
+import { Header, Icon, Chips, Board, Rating, Reasons, Sheet, ItemThumb, Empty, Spinner, Toggle, navigate, toast, confirmAsk, autoLayout, useAsync, useAspects, Piece } from '../ui/components.js';
 import { HARMONY, TasteButtons } from './style.js';
 
 export function OutfitsView() {
@@ -135,7 +135,7 @@ export function BuilderView({ id, query }) {
     setSel(l.id);
     const r = boardRef.current.getBoundingClientRect();
     drag.current = { id: l.id, sx: e.clientX, sy: e.clientY, x: l.x, y: l.y, W: r.width, H: r.height };
-    e.target.setPointerCapture?.(e.pointerId);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
   }
   function onMove(e) {
     const d = drag.current;
@@ -160,8 +160,7 @@ export function BuilderView({ id, query }) {
     <${Header} title=${existing ? 'Edit outfit' : 'Create outfit'} backTo="" right=${html`<button class="btn small primary" disabled=${!ids.length} onClick=${() => setMeta(true)}>Save</button>`} />
     <div class="board edit" ref=${boardRef} onPointerMove=${onMove} onPointerUp=${onUp} onPointerCancel=${onUp} onClick=${(e) => e.target === boardRef.current && setSel(null)}>
       ${layout.filter((l) => byId.has(l.id)).sort((a, b) => a.z - b.z).map((l) => html`
-        <img src=${byId.get(l.id).image_url} alt="" draggable="false" class=${sel === l.id ? 'sel' : ''} onPointerDown=${(e) => onDown(e, l)}
-          style=${`left:${l.x}%;top:${l.y}%;width:${l.w}%;height:${l.h}%;z-index:${l.z}`} />`)}
+        <${Piece} key=${l.id} item=${byId.get(l.id)} l=${l} cls=${sel === l.id ? 'sel' : ''} onPointerDown=${(e) => onDown(e, l)} />`)}
       ${!ids.length ? html`<div class="board-hint">Tap clothes below to add them, then drag to arrange</div>` : null}
     </div>
     ${selL ? html`<div class="row gap edit-tools">
