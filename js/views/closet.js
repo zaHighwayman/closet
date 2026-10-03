@@ -48,6 +48,7 @@ export function ClosetView({ query }) {
 
   return html`
     <${Header} title="Closet" sub=${`${items.length} items · ${items.length - counts.dirty - counts.in_wash} clean`} right=${html`
+      <a class="btn small" href="#/create?from=/closet"><${Icon} name="edit" size=${16} /> Create a fit</a>
       <a class="icon-btn" href="#/stats" aria-label="Stats"><${Icon} name="chart" /></a>
       <a class="icon-btn" href="#/settings" aria-label="Settings"><${Icon} name="settings" /></a>`} />
     <div class="laundry-strip" onClick=${() => navigate('/laundry')} role="button" tabindex="0">

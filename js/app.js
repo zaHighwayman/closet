@@ -7,7 +7,8 @@ import { AuthView } from './views/auth.js';
 import { ClosetView, LaundryView } from './views/closet.js';
 import { AddItemsView, ItemView } from './views/item.js';
 import { StyleView } from './views/style.js';
-import { OutfitsView, OutfitView, BuilderView } from './views/outfits.js';
+import { OutfitsView, OutfitView } from './views/outfits.js';
+import { CreatorView } from './views/creator.js';
 import { StylistView } from './views/stylist.js';
 import { PlanView, TripsView, TripView } from './views/plan.js';
 import { StatsView, InspoView } from './views/insights.js';
@@ -18,7 +19,7 @@ import { DiscoverView } from './views/discover.js';
 
 const ROUTES = [
   ['/closet', ClosetView], ['/closet/add', AddItemsView], ['/item/:id', ItemView], ['/laundry', LaundryView],
-  ['/style', StyleView], ['/discover', DiscoverView], ['/outfits', OutfitsView], ['/outfit/:id', OutfitView], ['/builder', BuilderView], ['/builder/:id', BuilderView],
+  ['/style', StyleView], ['/discover', DiscoverView], ['/outfits', OutfitsView], ['/outfit/:id', OutfitView], ['/create', CreatorView], ['/create/:id', CreatorView], ['/builder', CreatorView], ['/builder/:id', CreatorView],
   ['/stylist', StylistView], ['/plan', PlanView], ['/trips', TripsView], ['/trip/:id', TripView],
   ['/stats', StatsView], ['/inspo', InspoView],
   ['/explore', ExploreView], ['/u/:username', ProfileView], ['/me', MeView],
@@ -43,7 +44,7 @@ const getPath = () => location.hash.replace(/^#/, '') || '/closet';
 const TABS = [
   ['/closet', 'closet', 'Closet'], ['/style', 'style', 'Style'], ['/stylist', 'chat', 'Stylist'], ['/plan', 'calendar', 'Plan'], ['/explore', 'explore', 'Explore'],
 ];
-const TAB_OWNERS = { '/item': '/closet', '/laundry': '/closet', '/outfits': '/style', '/discover': '/style', '/outfit': '/style', '/builder': '/style', '/trips': '/plan', '/trip': '/plan',
+const TAB_OWNERS = { '/item': '/closet', '/laundry': '/closet', '/outfits': '/style', '/discover': '/style', '/outfit': '/style', '/builder': '/style', '/create': '/style', '/trips': '/plan', '/trip': '/plan',
   '/u': '/explore', '/market': '/explore', '/listing': '/explore', '/messages': '/explore', '/chat': '/explore', '/me': '/explore', '/stats': '/closet', '/inspo': '/style', '/settings': '/explore' };
 
 function TabBar({ path, unread }) {

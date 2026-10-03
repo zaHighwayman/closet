@@ -94,7 +94,7 @@ export function useOutfitActions(items, occasion, from = '/style') {
     },
     onWear: async () => { await logWear(o.itemIds); toast('Logged as worn today'); },
     onPlan: () => setPlanFor(o),
-    onEdit: () => navigate(`/builder?items=${o.itemIds.join(',')}&slots=${encodeURIComponent(JSON.stringify(o.slots))}&occasion=${occasion || ''}&from=${encodeURIComponent(from)}`),
+    onEdit: () => navigate(`/create?items=${o.itemIds.join(',')}&slots=${encodeURIComponent(JSON.stringify(o.slots))}&occasion=${occasion || ''}&from=${encodeURIComponent(from)}`),
   });
   const sheet = html`<${Sheet} open=${!!planFor} onClose=${() => setPlanFor(null)} title="Plan this outfit">
     <label>Date<input type="date" value=${date} onInput=${(e) => setDate(e.target.value)} /></label>
@@ -155,6 +155,7 @@ export function StyleView({ query }) {
     </div>
     <div class="row gap">
       <button class="btn" onClick=${() => setSeed(Math.floor(Math.random() * 1e9))}><${Icon} name="shuffle" /> More ideas</button>
+      <button class="btn" onClick=${() => navigate('/create?from=/style')}><${Icon} name="edit" /> Create a fit</button>
       ${aiAvailable() && outfits.length > 2 ? html`<button class="btn" disabled=${ai?.loading} onClick=${askAi}><${Icon} name="chat" /> ${ai?.loading ? 'Thinking…' : 'Stylist\'s top 3'}</button>` : null}
       ${ai?.picks ? html`<button class="link" onClick=${() => setAi(null)}>Show all</button>` : null}
     </div>

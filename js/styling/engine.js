@@ -504,6 +504,16 @@ export function pickCommuteLayer(slots, items, ctx, outsideTemp) {
   return best;
 }
 
+/** Score an outfit where you chose the slots yourself (fit creator). slots hold items: { base, mid, outer, bottom, one_piece, shoes, accessories[] } */
+export function rateSlots(slots, ctx = {}) {
+  const n = (x) => (x ? normalizeItem(x) : null);
+  const s = { base: n(slots.base), mid: n(slots.mid), outer: n(slots.outer), bottom: n(slots.bottom), one_piece: n(slots.one_piece), shoes: n(slots.shoes),
+    accessories: (slots.accessories || []).map(normalizeItem) };
+  if (s.one_piece) { s.base = null; s.bottom = null; }
+  const climate = resolveClimate(ctx.weather);
+  return scoreOutfit(s, { ...ctx, climate, includeDirty: true }, { explainInvalid: true, noRotation: true });
+}
+
 /** Score a hand-built outfit (manual builder, inspiration match). */
 export function rateItems(rawItems, ctx = {}) {
   const items = rawItems.map(normalizeItem);

@@ -107,7 +107,7 @@ export function InspoView() {
       ${res.matches.some((m) => !m.item || m.closeness < 40) ? html`<p class="muted small">Low matches are pieces you could add to get closer to this look.</p>` : null}
       ${matched.length ? html`<div class="actions">
         <button class="btn primary" onClick=${async () => { const o = await saveOutfit({ item_ids: matched.map((i) => i.id), layout: autoLayout(matched), occasion: res.look.occasion, name: 'Inspired look', rating: res.rating?.rating }); navigate('/outfit/' + o.id); }}>Save outfit</button>
-        <button class="btn" onClick=${() => navigate(`/builder?items=${matched.map((i) => i.id).join(',')}`)}>Tweak it</button>
+        <button class="btn" onClick=${() => navigate(`/create?items=${matched.map((i) => i.id).join(',')}`)}>Tweak it</button>
         <button class="btn" disabled=${matched.some((i) => i.status !== 'clean')} onClick=${() => logWear(matched.map((i) => i.id)).then(() => toast('Logged as worn today'))}>Wear today</button>
       </div>` : null}` : null}`;
 }

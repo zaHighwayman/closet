@@ -22,7 +22,7 @@ A free, open wardrobe app in the spirit of Fitted, with every paid feature inclu
 - **Discover.** An endless feed of outfit ideas built from your closet plus one or two pieces you don't own yet. Each idea shows "You have 3/4", what's missing, a link to find it, and a wishlist that ranks pieces by how many ideas they'd unlock.
 - **AI stylist chat** (Groq). It knows your clothes, the weather and what's in the wash. It only recommends outfits the style engine has already checked.
 - **Other features:**
-  - manual outfit builder (drag, resize and layer pieces, with a live rating)
+  - fit creator: pick a piece for each slot (top, layer, outerwear, bottoms, shoes, accessories) from a list ranked by how well it works with the rest; "Complete my fit", lock + shuffle, drag to arrange, and a live rating
   - saved outfits and collections
   - calendar for planning outfits and logging what you wore
   - trip planner with the destination forecast, an outfit per day and a packing list

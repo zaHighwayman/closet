@@ -94,7 +94,7 @@ export function ProfileView({ username }) {
 export function MeView() {
   const { profile, items, outfits } = useStore();
   const links = [
-    ['/outfits', 'save', 'Saved outfits', `${outfits.length}`], ['/stats', 'chart', 'Stats & what to buy', ''], ['/laundry', 'wash', 'Laundry', ''],
+    ['/create', 'edit', 'Create a fit', ''], ['/outfits', 'save', 'Saved outfits', `${outfits.length}`], ['/stats', 'chart', 'Stats & what to buy', ''], ['/laundry', 'wash', 'Laundry', ''],
     ['/trips', 'trip', 'Trips', ''], ['/discover', 'bulb', 'Discover new outfit ideas', ''], ['/inspo', 'image', 'Recreate a look', ''], ['/market', 'bag', 'Marketplace', ''], ['/messages', 'message', 'Messages', ''],
     ['/settings', 'settings', 'Settings & style profile', ''],
   ];
