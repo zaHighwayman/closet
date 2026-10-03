@@ -107,7 +107,7 @@ export function buildCatalog(rawOwned, { season } = {}) {
 export const CATALOG_PHOTOS = new Set(['t-shirt', 'long-sleeve tee', 'polo', 'oxford shirt', 'casual shirt', 'dress shirt', 'turtleneck', 'henley',
   'crewneck sweater', 'v-neck sweater', 'quarter-zip', 'cardigan', 'sweatshirt', 'hoodie', 'overshirt', 'blazer', 'denim jacket', 'bomber jacket',
   'leather jacket', 'chore jacket', 'trench coat', 'wool coat', 'puffer jacket', 'jeans', 'chinos', 'trousers', 'cargo pants', 'joggers', 'shorts',
-  'skirt', 'dress', 'sneakers', 'loafers', 'derbies', 'chelsea boots', 'boots', 'heels']);
+  'sneakers', 'loafers', 'derbies', 'chelsea boots', 'boots', 'heels']);
 export const photoPath = (sub) => `img/catalog/${sub.replace(/[^a-z0-9]+/g, '-')}.webp`;
 
 export const isVirtual = (id) => typeof id === 'string' && id.startsWith('v:');
