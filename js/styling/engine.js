@@ -90,6 +90,8 @@ export function scoreOutfit(slots, ctx = {}, opts = {}) {
 
   const clothes = [slots.one_piece || slots.base, slots.mid, slots.outer, slots.bottom, slots.shoes].filter(Boolean);
   const all = [...clothes, ...(slots.accessories || [])];
+  // what people actually see: a tee fully hidden under a knit earns no style points
+  const visible = clothes.filter((c) => c !== stack.hiddenBase);
   const areas = areasFor(slots, stack);
   const cAreas = colorAreas(areas);
   const total = cAreas.reduce((s, a) => s + a.area, 0) || 1;
@@ -195,9 +197,9 @@ export function scoreOutfit(slots, ctx = {}, opts = {}) {
   }
 
   // ---- texture
-  const tex = new Set(clothes.map((c) => c.material).filter(Boolean));
-  if (tex.size >= 3 || (tex.size >= 2 && clothes.length <= 3)) add(0.4, `texture mix (${[...tex].slice(0, 3).join(', ')})`);
-  const denim = clothes.filter((c) => c.material === 'denim');
+  const tex = new Set(visible.map((c) => c.material).filter(Boolean));
+  if (tex.size >= 3 || (tex.size >= 2 && visible.length <= 3)) add(0.4, `texture mix (${[...tex].slice(0, 3).join(', ')})`);
+  const denim = visible.filter((c) => c.material === 'denim');
   if (denim.length >= 2) {
     const d = Math.abs(lightness(mainColor(denim[0]).hex) - lightness(mainColor(denim[1]).hex));
     add(d > 0.15 ? 0.1 : -1, d > 0.15 ? 'contrasting denim washes' : 'matching denim-on-denim');
@@ -211,9 +213,9 @@ export function scoreOutfit(slots, ctx = {}, opts = {}) {
     const tw = targetWarmth(t), diff = w - tw;
     // indoors you can always take a layer off; outside in the heat, overdressing really hurts
     const hot = where === 'outside' && t >= 20;
-    const room = hot ? 1.5 : 3;
+    const room = hot ? 1 : 3;
     if (diff < -1) add(-(-diff - 1) * 1.2, `not warm enough ${where} (${Math.round(t)}°C)`);
-    else if (diff > room) add(-(diff - room) * (hot ? 1.5 : 1), `too warm ${where} (${Math.round(t)}°C)`);
+    else if (diff > room) add(-(diff - room) * (hot ? 2 : 1), `too warm ${where} (${Math.round(t)}°C)`);
   };
   if (!opts.partial || slots.base || slots.mid) {
     if (climate.mode === 'outside') warmthCheck(torsoWarmth({ base: slots.base || slots.one_piece, mid: slots.mid, outer }), climate.outerTemp, 'outside');
@@ -246,17 +248,17 @@ export function scoreOutfit(slots, ctx = {}, opts = {}) {
   // ---- style coherence
   const prof = new Set(ctx.styleProfile || []);
   if (prof.size) {
-    const hit = clothes.filter((c) => c.style_tags.some((t) => prof.has(t))).length / clothes.length;
+    const hit = visible.filter((c) => c.style_tags.some((t) => prof.has(t))).length / visible.length;
     if (hit > 0) add(hit * 0.6, hit >= 0.6 ? 'matches your style profile' : null);
   }
-  const tagSet = new Set(clothes.flatMap((c) => c.style_tags));
+  const tagSet = new Set(visible.flatMap((c) => c.style_tags));
   for (const [a, b] of CONFLICTING_TAGS) if (tagSet.has(a) && tagSet.has(b)) add(-0.6, `mixes ${a} and ${b} pieces`);
 
   // ---- accessories
   const accs = slots.accessories || [];
   if (accs.length) {
-    const env = { formality: meanF, occasionFormality: occ.formality, tags: dominantTags(clothes), profile: prof, climate, code: climate.code,
-      colors: clothes.map(mainColor), manual: !!opts.noRotation };
+    const env = { formality: meanF, occasionFormality: occ.formality, tags: dominantTags(visible), profile: prof, climate, code: climate.code,
+      colors: visible.map(mainColor), manual: !!opts.noRotation };
     const seen = new Map();
     for (const a of accs) {
       const sl = slotOf(a);
@@ -277,7 +279,7 @@ export function scoreOutfit(slots, ctx = {}, opts = {}) {
   // ---- rotation (only when suggesting — not when rating an outfit the user picked)
   const now = ctx.today || Date.now();
   let rot = 0;
-  for (const it of opts.noRotation ? [] : clothes) {
+  for (const it of opts.noRotation ? [] : visible) {
     if (!it.last_worn) { rot += 0.15; continue; }
     const days = (now - new Date(it.last_worn).getTime()) / 864e5;
     if (days < 2) { rot -= 1.2; warnings.push({ d: 0, text: `you wore the ${describe(it)} ${days < 1 ? 'today' : 'yesterday'}` }); }
@@ -285,6 +287,8 @@ export function scoreOutfit(slots, ctx = {}, opts = {}) {
     else if (days > 30) rot += 0.3;
   }
   rank(Math.max(-3, Math.min(0.8, rot)));
+  // keep it simple: a hidden extra layer has to be needed for warmth to win
+  if (stack.hiddenBase) rank(-0.5);
   if (rot > 0.4) reasons.push({ d: 0, text: 'brings out pieces you haven\'t worn lately' });
   if (!opts.noRotation && ctx.recentCombos?.has(signature(all))) { rank(-1); warnings.push({ d: 0, text: 'you wore this exact outfit recently' }); }
   // packing re-use steers the choice but isn't a style merit, so it stays out of the rating
@@ -420,17 +424,22 @@ export function generate(rawItems, ctx = {}) {
   const rest = full.slice(0, 300);
   const shape = (o) => {
     const b = o.slots.base || o.slots.one_piece, m = o.slots.mid;
+    if (b && m && !o.result.visibleParts.length) return 'single:other'; // tee hidden under a knit looks like the knit alone
     if (b && m) return b.neckline === 'collared' ? 'collar-under-layer' : 'layered';
     return `single:${(m || b)?.neckline === 'collared' ? 'shirt' : 'other'}`;
   };
+  // no filler: after the first few ideas, skip anything clearly worse than the best one
+  const floor = Math.min(7.5, (full[0]?.result.rating ?? 0) - 1.5);
   while (chosen.length < n && rest.length) {
     let best = -1, bestVal = -Infinity;
     for (let i = 0; i < rest.length; i++) {
+      if (chosen.length >= 3 && rest[i].result.rating < floor) continue;
       const sim = (ch) => rest[i].ids.filter((id) => ch.ids.includes(id)).length / rest[i].ids.length + (shape(ch) === shape(rest[i]) ? 0.25 * chosen.filter((x) => shape(x) === shape(rest[i])).length : 0);
       const overlap = chosen.length ? Math.max(...chosen.map(sim)) : 0;
       const v = rest[i].score - 3 * overlap;
       if (v > bestVal) { bestVal = v; best = i; }
     }
+    if (best < 0) break;
     chosen.push(rest.splice(best, 1)[0]);
   }
 

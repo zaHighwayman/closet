@@ -86,6 +86,11 @@ export function checkStack({ base = null, mid = null, outer = null }) {
     if (verdict === 'bad') res.warnings.push(`${inner.subcategory} under a ${outer.subcategory} clashes in style`);
   }
 
+  // --- a thin, closed top (long-sleeve tee, light henley…) isn't something you wear over another top
+  if (base && mid && mid.front !== 'open' && mid.sleeve !== 'none' && mid.thickness < 2) {
+    return reject(`a ${mid.subcategory || 'thin top'} is too thin to wear over the ${describe(base)}`);
+  }
+
   // --- thickness order: thin layers go underneath
   if (base && mid && base.thickness > mid.thickness + 0.5) return reject(`${describe(base)} is thicker than the ${describe(mid)} over it`);
   if (outer && inner) {
@@ -146,6 +151,10 @@ export function checkStack({ base = null, mid = null, outer = null }) {
       if (accent) {
         res.areas.push({ item: base, area: accent, part: parts.join('+') });
         res.visibleParts.push({ item: base, part: parts.join(', ') });
+      } else {
+        // nothing of the inner layer shows: only worth it under a proper knit (comfort / warmth), never under a thin top
+        if (mid.thickness < 2.5) return reject(`a ${describe(base)} under a thin ${mid.subcategory} doesn't show and adds nothing`);
+        res.hiddenBase = base;
       }
     }
   } else {

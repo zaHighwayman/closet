@@ -288,5 +288,25 @@ test('discovery ideas mix owned pieces with 1–2 new ones, no repeats', () => {
   assert(new Set(sigs).size === sigs.length, 'repeats');
 });
 
+// ---------------------------------------------------------------- hidden layers
+test('no t-shirt under a thin long-sleeve top', () => {
+  const ls = I('ls-tee', 'long-sleeve tee', '#1f2a44', 'navy', { layer_roles: ['base', 'mid'] });
+  assert(!checkStack({ base: byId['tee-white'], mid: ls }).ok, 'tee under a thin long-sleeve should be rejected');
+  const out = generate([...closet, ls], { occasion: 'casual', count: 8, weather: { mode: 'indoor' } });
+  assert(!out.some((o) => o.slots.mid === 'ls-tee' && o.slots.base), out.map((o) => o.itemIds.join('+')).join(' / '));
+});
+
+test('a hidden tee under a knit earns no style points', () => {
+  const alone = rateItems([byId['knit-navy'], byId['chinos-beige'], byId['loafers']], { occasion: 'smart casual' });
+  const withTee = rateItems([byId['tee-white'], byId['knit-navy'], byId['chinos-beige'], byId['loafers']], { occasion: 'smart casual' });
+  assert(withTee.rating <= alone.rating, `with hidden tee ${withTee.rating} vs alone ${alone.rating}`);
+});
+
+test('indoors, a knit on its own beats the same knit over a hidden tee', () => {
+  const out = generate(closet, { occasion: 'smart casual', count: 8, weather: { mode: 'indoor', indoorTemp: 21 } });
+  const hidden = out.filter((o) => o.slots.mid && o.slots.base && !o.visibleParts.length).length;
+  assert(hidden <= 1, `${hidden} outfits with a hidden tee: ` + out.map((o) => o.itemIds.join('+')).join(' / '));
+});
+
 log(`\n${pass} passed, ${fail} failed`);
 globalThis.__results = { pass, fail, results };
