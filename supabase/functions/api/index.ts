@@ -29,6 +29,91 @@ function firstKey(envName: string): string | undefined {
   try { return Object.values(JSON.parse(Deno.env.get(envName) ?? '{}'))[0] as string | undefined; } catch { return undefined; }
 }
 
+// ---------------------------------------------------------------- shop scout
+// Searches clothing brands' own Shopify stores through their public storefront endpoints.
+// Polite: follows each store's robots.txt, identifies itself, caches, small result sizes.
+const UA = 'Mozilla/5.0 (compatible; ClosetApp/1.0; personal wardrobe inspiration; +https://github.com/zaHighwayman/closet)';
+const cache = new Map<string, { t: number; v: unknown }>();
+async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.t < ttlMs) return hit.v as T;
+  const v = await fn();
+  cache.set(key, { t: Date.now(), v });
+  if (cache.size > 500) cache.delete(cache.keys().next().value!);
+  return v;
+}
+function okHost(h: string) {
+  return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(h) && !/^(localhost|.*\.local|.*\.internal)$/i.test(h) && !/^\d+\.\d+\.\d+\.\d+$/.test(h);
+}
+async function fetchText(u: string, ms = 8000) {
+  const r = await fetch(u, { headers: { 'User-Agent': UA, Accept: 'application/json,text/plain,*/*' }, signal: AbortSignal.timeout(ms), redirect: 'follow' });
+  if (!r.ok) throw new Error(`${r.status}`);
+  const len = Number(r.headers.get('content-length') || 0);
+  if (len > 8_000_000) throw new Error('too large');
+  return await r.text();
+}
+async function robots(host: string) {
+  return cached(`robots:${host}`, 6 * 3600e3, async () => {
+    const rules: string[] = [];
+    try {
+      let on = false;
+      for (const line of (await fetchText(`https://${host}/robots.txt`, 5000)).split('\n')) {
+        const l = line.split('#')[0].trim();
+        const i = l.indexOf(':');
+        if (i < 0) continue;
+        const k = l.slice(0, i).trim().toLowerCase(), v = l.slice(i + 1).trim();
+        if (k === 'user-agent') on = v === '*';
+        else if (on && k === 'disallow' && v) rules.push(v);
+      }
+    } catch { /* no robots.txt: allowed */ }
+    return rules;
+  });
+}
+const allowed = (rules: string[], path: string) => !rules.some((r) => {
+  const re = new RegExp('^' + r.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\\\$$/, '$'));
+  return re.test(path);
+});
+async function storeMeta(host: string) {
+  return cached(`meta:${host}`, 24 * 3600e3, async () => {
+    try { const m = JSON.parse(await fetchText(`https://${host}/meta.json`, 5000)); return { name: m.name || host, currency: m.currency || null }; }
+    catch { return { name: host, currency: null }; }
+  });
+}
+const img = (u: string | null | undefined, w = 900) => (!u ? null : (u.startsWith('//') ? 'https:' + u : u).replace(/([?&])width=\d+/, '$1') + (u.includes('?') ? '&' : '?') + `width=${w}`);
+
+type Product = { store: string; brand: string; title: string; handle: string; url: string; image: string | null; images?: string[]; price: number | null; currency: string | null; type: string; tags: string[] };
+
+async function searchStore(host: string, q: string, limit: number): Promise<Product[]> {
+  const [rules, meta] = await Promise.all([robots(host), storeMeta(host)]);
+  const map = (p: any, images?: string[]): Product => ({
+    store: host, brand: p.vendor || meta.name, title: String(p.title || '').slice(0, 140), handle: p.handle,
+    url: `https://${host}/products/${p.handle}`, image: img(p.image || p.featured_image?.url || p.images?.[0]?.src),
+    images: images?.slice(0, 6), price: p.price != null ? Number(p.price) : p.variants?.[0]?.price != null ? Number(p.variants[0].price) : null,
+    currency: meta.currency, type: String(p.type || p.product_type || ''), tags: (Array.isArray(p.tags) ? p.tags : String(p.tags || '').split(',')).map((t: string) => t.trim()).filter(Boolean).slice(0, 12),
+  });
+  const suggest = '/search/suggest.json';
+  if (allowed(rules, suggest)) {
+    const u = `https://${host}${suggest}?q=${encodeURIComponent(q)}&resources[type]=product&resources[limit]=${limit}`;
+    const d = JSON.parse(await fetchText(u));
+    return (d.resources?.results?.products || []).filter((p: any) => p.available !== false).map((p: any) => map(p));
+  }
+  if (!allowed(rules, '/products.json')) return [];
+  // store forbids bots on search: read its public product list instead and match locally
+  const list: any[] = await cached(`products:${host}`, 3600e3, async () => JSON.parse(await fetchText(`https://${host}/products.json?limit=250`, 12000)).products || []);
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  return list.filter((p) => {
+    const hay = `${p.title} ${p.product_type} ${(p.tags || []).join(' ')}`.toLowerCase();
+    return words.every((w) => hay.includes(w)) && p.variants?.some((v: any) => v.available !== false);
+  }).slice(0, limit).map((p) => map(p, (p.images || []).map((i: any) => img(i.src))));
+}
+
+async function productImages(host: string, handle: string) {
+  const rules = await robots(host);
+  if (!allowed(rules, `/products/${handle}.json`)) return [];
+  const d = JSON.parse(await fetchText(`https://${host}/products/${encodeURIComponent(handle)}.json`));
+  return (d.product?.images || []).slice(0, 8).map((i: any) => img(i.src));
+}
+
 async function groq(model: string, body: Record<string, unknown>) {
   const res = await fetch(GROQ_URL, {
     method: 'POST',
@@ -63,6 +148,23 @@ Deno.serve(async (req) => {
     if (files?.length) await admin.storage.from('closet').remove(files.map((f) => `${user.id}/${f.name}`));
     const { error } = await admin.auth.admin.deleteUser(user.id);
     return error ? json({ error: error.message }, 500) : json({ ok: true });
+  }
+
+  // ---- shop scout: search brand stores
+  if (body.action === 'shop_search') {
+    const q = String(body.query || '').slice(0, 80).trim();
+    const hosts: string[] = (Array.isArray(body.stores) ? body.stores : []).map((h: string) => String(h).toLowerCase().replace(/^https?:\/\//, '').split('/')[0]).filter(okHost).slice(0, 8);
+    if (!q || !hosts.length) return json({ error: 'query and stores required' }, 400);
+    const limit = Math.min(Number(body.limit) || 6, 12);
+    const results = await Promise.allSettled(hosts.map((h) => searchStore(h, q, limit)));
+    const products = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+    const errors = results.map((r, i) => (r.status === 'rejected' ? `${hosts[i]}: ${String(r.reason).slice(0, 80)}` : null)).filter(Boolean);
+    return json({ products, errors });
+  }
+  if (body.action === 'shop_product') {
+    const host = String(body.store || '').toLowerCase();
+    if (!okHost(host) || !body.handle) return json({ error: 'store and handle required' }, 400);
+    try { return json({ images: await productImages(host, String(body.handle)) }); } catch (e) { return json({ images: [], error: String(e) }); }
   }
 
   // ---- AI chat completion

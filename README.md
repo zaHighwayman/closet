@@ -19,7 +19,7 @@ A free, open wardrobe app in the spirit of Fitted, with every paid feature inclu
 - **Weather on or off.** You can dress for the forecast, or for a day that's mostly inside with a short trip out. You can also ignore the weather completely (indoors at about 21 °C); on a cold day you then get a separate "commute layer" suggestion.
 - **Accessories with rules.** Hats, AirPods, watches, belts, ties, scarves, jewellery and bags are only added when they suit the outfit. A cap never goes with a preppy or collared-shirt outfit, a belt has to match your shoes, sunglasses need sun and a beanie needs cold.
 - **Learns your taste.** Tap 👍 or 👎 on any outfit and future suggestions and the stylist adjust to it.
-- **Discover.** An endless feed of outfit ideas built from your closet plus one or two pieces you don't own yet. Each idea shows "You have 3/4", what's missing, a link to find it, and a wishlist that ranks pieces by how many ideas they'd unlock.
+- **Discover with real clothes.** While the app is open, a background "scout" works out which pieces would unlock the best outfits for your closet and searches clothing brands' own online stores for them (Colorful Standard, Norse Projects, Drake's, Universal Works, Everlane, Folk, Aimé Leon Dore and about 20 more). It picks clean product photos, removes the background, and keeps the finds on your device. Discover builds endless outfit ideas around them, showing "You have 3/4", the brand, the price and a link to the product. You can filter by brand, search your own words ("linen", "cashmere") and choose who you shop for. Really good finds put a dot on Discover. The scout follows each store's robots.txt and identifies itself honestly.
 - **AI stylist chat** (Groq). It knows your clothes, the weather and what's in the wash. It only recommends outfits the style engine has already checked.
 - **Other features:**
   - fit creator: pick a piece for each slot (top, layer, outerwear, bottoms, shoes, accessories) from a list ranked by how well it works with the rest; "Complete my fit", lock + shuffle, drag to arrange, and a live rating
@@ -62,6 +62,8 @@ Then open http://localhost:8000.
 3. In the left sidebar open **Edge Functions → Secrets** tab (not Project Settings → API Keys, which makes Supabase's own keys). Under **Add new secret**, set the name to `GROQ_API_KEY` and the value to the `gsk_…` key from Groq, then click **Save**.
 
    The key lives only on the server; the browser never sees it. Each user can make 200 AI calls per day, which you can change with an `AI_DAILY_LIMIT` secret. Models can be overridden with the `GROQ_VISION_MODEL`, `GROQ_TEXT_MODEL` and `GROQ_FAST_MODEL` secrets. Check https://console.groq.com/docs/models if Groq retires one.
+
+**Updating the function:** when the app gets new server features (like the Discover scout), open your function in **Edge Functions → (your function) → Code**, replace everything with the latest [`supabase/functions/api/index.ts`](supabase/functions/api/index.ts) and click **Deploy**. Then put the function's name in `FUNCTION_NAME` in [`js/config.js`](js/config.js).
 
 ### 3. GitHub Pages
 1. Create a repo and push this folder to it.

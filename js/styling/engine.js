@@ -336,7 +336,7 @@ function topDiverse(cands, n, cap) {
 }
 
 // pieces you don't own yet (discovery feed) have ids starting with "v:"
-const tooManyVirtual = (ids, ctx) => ctx.maxVirtual != null && ids.filter((id) => String(id).startsWith('v:')).length > ctx.maxVirtual;
+const tooManyVirtual = (ids, ctx) => ctx.maxVirtual != null && ids.filter((id) => /^(v|p):/.test(String(id))).length > ctx.maxVirtual; // v: catalog, p: real shop product
 
 const slotIds = (s) => [s.base, s.one_piece, s.mid, s.outer, s.bottom, s.shoes, ...(s.accessories || [])].filter(Boolean).map((i) => i.id);
 

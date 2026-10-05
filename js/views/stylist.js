@@ -95,7 +95,7 @@ export function StylistView() {
   }
 
   return html`
-    <${Header} title="Stylist" sub="Knows your clothes, the weather and what's in the wash" right=${msgs.length ? html`<button class="btn small" onClick=${() => { setMsgs([]); store([]); }}>New chat</button>` : null} />
+    <${Header} title="Stylist" sub="Knows your clothes, the weather and what's in the wash" right=${html`<button class="btn small" disabled=${!msgs.length || busy} onClick=${() => { if (window.confirm('Clear this chat?')) { setMsgs([]); store([]); } }}><${Icon} name="trash" size=${16} /> Clear chat</button>`} />
     <div class="chat">
       ${!msgs.length ? html`<div class="chat-empty">
         <p class="muted">Ask for an outfit, an opinion, or what to buy. Suggestions only use clean clothes and real layering rules.</p>

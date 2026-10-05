@@ -85,3 +85,97 @@ export async function toAiDataUrl(blobOrUrl, max = 640) {
   ctx.drawImage(img, 0, 0, c.width, c.height);
   return c.toDataURL('image/jpeg', 0.85);
 }
+
+// ------------------------------------------------------------------ shop product photos (scout)
+
+/** Load a cross-origin image for pixel access (Shopify's CDN allows this). */
+function loadCors(url) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => res(img);
+    img.onerror = () => rej(new Error('image failed'));
+    img.src = url;
+  });
+}
+
+/** Is this a packshot? A plain, even studio background all around the edge (models/lifestyle shots aren't). */
+function backgroundInfo(ctx, w, h) {
+  const d = ctx.getImageData(0, 0, w, h).data;
+  const px = [];
+  const at = (x, y) => { const i = (y * w + x) * 4; return [d[i], d[i + 1], d[i + 2]]; };
+  for (let x = 0; x < w; x += 2) { px.push(at(x, 0), at(x, h - 1), at(x, 1), at(x, h - 2)); }
+  for (let y = 0; y < h; y += 2) { px.push(at(0, y), at(w - 1, y), at(1, y), at(w - 2, y)); }
+  const mean = [0, 1, 2].map((k) => px.reduce((s, p) => s + p[k], 0) / px.length);
+  const dist = (p) => Math.hypot(p[0] - mean[0], p[1] - mean[1], p[2] - mean[2]);
+  const spread = px.reduce((s, p) => s + dist(p), 0) / px.length;
+  const uniform = px.filter((p) => dist(p) < 22).length / px.length;
+  // centre of the image vs background: tells if a flood fill could eat into the garment
+  const cx = Math.floor(w * 0.35), cy = Math.floor(h * 0.35), cw = Math.floor(w * 0.3), ch = Math.floor(h * 0.3);
+  const c = ctx.getImageData(cx, cy, cw, ch).data;
+  let cr = 0, cg = 0, cb = 0, n = 0;
+  for (let i = 0; i < c.length; i += 16) { cr += c[i]; cg += c[i + 1]; cb += c[i + 2]; n++; }
+  const centre = [cr / n, cg / n, cb / n];
+  return { mean, spread, uniform, contrast: dist(centre), packshot: uniform > 0.9 && spread < 14 };
+}
+
+/** Remove a flat background by flood-filling from the edges, with soft edges. */
+function floodRemove(ctx, w, h, mean, tol) {
+  const im = ctx.getImageData(0, 0, w, h), d = im.data;
+  const bg = new Uint8Array(w * h);
+  const near = (i, t) => Math.hypot(d[i * 4] - mean[0], d[i * 4 + 1] - mean[1], d[i * 4 + 2] - mean[2]) < t;
+  const stack = [];
+  for (let x = 0; x < w; x++) stack.push(x, (h - 1) * w + x);
+  for (let y = 0; y < h; y++) stack.push(y * w, y * w + w - 1);
+  while (stack.length) {
+    const i = stack.pop();
+    if (bg[i] || !near(i, tol)) continue;
+    bg[i] = 1;
+    const x = i % w, y = (i / w) | 0;
+    if (x > 0) stack.push(i - 1); if (x < w - 1) stack.push(i + 1);
+    if (y > 0) stack.push(i - w); if (y < h - 1) stack.push(i + w);
+  }
+  for (let i = 0; i < w * h; i++) {
+    if (bg[i]) { d[i * 4 + 3] = 0; continue; }
+    // feather pixels next to the background that are still close to its colour
+    const x = i % w, y = (i / w) | 0;
+    const edge = (x > 0 && bg[i - 1]) || (x < w - 1 && bg[i + 1]) || (y > 0 && bg[i - w]) || (y < h - 1 && bg[i + w]);
+    if (edge) {
+      const dd = Math.hypot(d[i * 4] - mean[0], d[i * 4 + 1] - mean[1], d[i * 4 + 2] - mean[2]);
+      d[i * 4 + 3] = Math.max(60, Math.min(255, (dd / (tol * 2.2)) * 255));
+    }
+  }
+  ctx.putImageData(im, 0, 0);
+}
+
+/**
+ * Pick the best packshot from a product's photos and cut it out.
+ * Returns { blob, palette, width, height, source } or null if there's no clean product-only photo.
+ */
+export async function cutoutProduct(urls, onProgress) {
+  for (const url of urls.filter(Boolean).slice(0, 5)) {
+    let img;
+    try { img = await loadCors(url); } catch { continue; }
+    const s = Math.min(1, 800 / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, w, h);
+    const info = backgroundInfo(ctx, w, h);
+    if (!info.packshot) continue; // a model / lifestyle shot: try the product's next photo
+    let blob;
+    if (info.contrast > 45) {
+      floodRemove(ctx, w, h, info.mean, Math.max(20, info.spread * 3 + 12));
+      blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+    } else {
+      // garment is close to the background colour (white tee on white): use the AI cut-out instead
+      onProgress?.('Cutting out (AI)…');
+      const src = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.92));
+      blob = await removeBackground(src, onProgress);
+    }
+    const fin = await finalize(blob, 600);
+    if (!fin.hasAlpha) continue;
+    return { ...fin, source: url };
+  }
+  return null;
+}

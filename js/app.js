@@ -16,6 +16,7 @@ import { ExploreView, ProfileView, MeView } from './views/social.js';
 import { MarketView, ListingView, NewListingView, InboxView, ChatView } from './views/market.js';
 import { SettingsView } from './views/settings.js';
 import { DiscoverView } from './views/discover.js';
+import { startScout } from './lib/scout.js';
 
 const ROUTES = [
   ['/closet', ClosetView], ['/closet/add', AddItemsView], ['/item/:id', ItemView], ['/laundry', LaundryView],
@@ -47,12 +48,12 @@ const TABS = [
 const TAB_OWNERS = { '/item': '/closet', '/laundry': '/closet', '/outfits': '/style', '/discover': '/style', '/outfit': '/style', '/builder': '/style', '/create': '/style', '/trips': '/plan', '/trip': '/plan',
   '/u': '/explore', '/market': '/explore', '/listing': '/explore', '/messages': '/explore', '/chat': '/explore', '/me': '/explore', '/stats': '/closet', '/inspo': '/style', '/settings': '/explore' };
 
-function TabBar({ path, unread }) {
+function TabBar({ path, unread, hot }) {
   const root = '/' + path.split('/')[1];
   const active = TAB_OWNERS[root] || root;
   return html`<nav class="tabbar" aria-label="Main">
     ${TABS.map(([to, icon, label]) => html`<a href=${'#' + to} class=${active === to ? 'on' : ''} aria-current=${active === to ? 'page' : null}>
-      <span class="tab-ic"><${Icon} name=${icon} size=${22} />${to === '/explore' && unread ? html`<i class="dot"></i>` : null}</span><span>${label}</span></a>`)}
+      <span class="tab-ic"><${Icon} name=${icon} size=${22} />${(to === '/explore' && unread) || (to === '/style' && hot) ? html`<i class="dot"></i>` : null}</span><span>${label}</span></a>`)}
   </nav>`;
 }
 
@@ -89,6 +90,7 @@ function App() {
       await loadProfile();
       await Promise.all([loadItems(), loadOutfits(), loadCollections()]);
       unreadCount().then(setUnread).catch(() => {});
+      startScout().catch(() => {}); // background search for real clothes (account mode only)
       // clean ?code= from the URL after a magic-link / OAuth sign-in
       if (location.search.includes('code=')) history.replaceState(null, '', location.pathname + location.hash);
     } catch (e) { console.error(e); setState({ bootError: e.message || String(e) }); }
@@ -107,7 +109,7 @@ function App() {
   return html`
     ${db.isLocal ? html`<div class="demo-banner">Demo mode — data stays on this device. <a href="#/settings">Set up accounts</a></div>` : null}
     <main class="page" key=${path}><${View} ...${params} query=${query} /></main>
-    <${TabBar} path=${path} unread=${unread} />
+    <${TabBar} path=${path} unread=${unread} hot=${st.scoutHot} />
     <${Toasts} />`;
 }
 

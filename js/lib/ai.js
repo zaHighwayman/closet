@@ -157,3 +157,13 @@ Return JSON {"picks": [{"n": number, "why": sentence}]}`;
   const r = parseJSON(await complete({ kind: 'text', json: true, max_tokens: 700, messages: [{ role: 'system', content: sys }, { role: 'user', content: 'Pick the best three.' }] }));
   return (r.picks || []).filter((p) => candidates[p.n]);
 }
+
+/** Quick check of a shop photo: garment only (no person)? what is it? */
+export async function checkProductPhoto(imageDataUrl, { onWait } = {}) {
+  const sys = `You check product photos for a wardrobe app. Return JSON {"garment_only": true if the photo shows ONLY the clothing item(s) with no person, body parts or mannequin visible, "subcategory": one of ${JSON.stringify(Object.keys(SUBCATEGORIES))} or null, "color": main colour name, "style_tags": 1-2 of ${JSON.stringify(STYLE_TAGS)}}`;
+  const text = await complete({
+    kind: 'vision', json: true, max_tokens: 200, temperature: 0, onWait,
+    messages: [{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'text', text: 'Check this photo.' }, { type: 'image_url', image_url: { url: imageDataUrl } }] }],
+  });
+  return parseJSON(text);
+}

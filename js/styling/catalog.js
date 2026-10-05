@@ -110,7 +110,7 @@ export const CATALOG_PHOTOS = new Set(['t-shirt', 'long-sleeve tee', 'polo', 'ox
   'sneakers', 'loafers', 'derbies', 'chelsea boots', 'boots', 'heels']);
 export const photoPath = (sub) => `img/catalog/${sub.replace(/[^a-z0-9]+/g, '-')}.webp`;
 
-export const isVirtual = (id) => typeof id === 'string' && id.startsWith('v:');
+export const isVirtual = (id) => typeof id === 'string' && /^(v|p):/.test(id);
 export const shopLink = (name) => `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(name)}`;
 
 function shuffled(list, seed) {

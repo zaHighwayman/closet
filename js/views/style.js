@@ -143,7 +143,7 @@ export function StyleView({ query }) {
   return html`
     <${Header} title="Style me" right=${html`
       <a class="icon-btn" href="#/inspo" aria-label="Recreate a look"><${Icon} name="image" /></a>
-      <a class="btn small" href="#/discover"><${Icon} name="bulb" size=${16} /> Discover</a>
+      <a class="btn small dot-wrap" href="#/discover"><${Icon} name="bulb" size=${16} /> Discover${useStore().scoutHot ? html`<i class="dot" title="New finds"></i>` : null}</a>
       <a class="btn small" href="#/outfits">Saved</a>`} />
     <div class="scroll-x"><${Chips} value=${occasion} onChange=${(o) => { if (o) { setOccasion(o); saveSettings({ occasion: o }).catch(() => {}); } }} options=${Object.entries(OCCASIONS).map(([k, v]) => [k, v.label])} /></div>
     <${WeatherControls} value=${wx} onChange=${setWx} weather=${weather} />
